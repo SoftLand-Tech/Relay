@@ -47,8 +47,9 @@
     "test": "tsx scripts/test-protocol.ts",
     "test:imports": "tsx scripts/test-expo-go-imports.ts .",
     "test:order": "tsx scripts/test-session-order.ts",
+    "test:slash": "tsx scripts/test-slash.ts",
     "test:live": "tsx scripts/test-live.ts",
-    "verify": "npm run typecheck && npm run test && npm run test:imports && npm run test:live && npm run test:order",
+    "verify": "npm run typecheck && npm run test && npm run test:imports && npm run test:live && npm run test:order && npm run test:slash",
     "pair": "./scripts/hermes-pair.sh",
     "watch": "./scripts/hermes-push-watch.sh"
   },

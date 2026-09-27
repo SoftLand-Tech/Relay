@@ -45,7 +45,7 @@ import {
   type ToolItem,
 } from '../../src/lib/chat'
 import { isConnected as isConnectedAtom, connectionState, gatewayError, retryNow } from '../../src/lib/gateway'
-import { completeSlash, loadCatalog, runCommand, directiveToText, type CompletionItem } from '../../src/lib/slash'
+import { completeSlash, loadCatalog, runCommand, type CompletionItem, type SlashOutcome } from '../../src/lib/slash'
 import { MessageBubble, ThinkingPanel, ToolRow } from '../../src/components/Chat'
 import { ScreenShell } from '../../src/components/ScreenShell'
 import { C } from '../../src/lib/theme'
@@ -58,7 +58,7 @@ const STARTERS = [
   { icon: 'help-circle-outline' as const, label: 'Browse slash commands' },
 ]
 
-const MAX_SLASH_SUGGESTIONS = 7
+const MAX_SLASH_ITEMS = 120
 
 export default function Chat() {
   const msgs = useStore(messages)
@@ -135,7 +135,7 @@ export default function Chat() {
     const t = setTimeout(async () => {
       try {
         const items = await completeSlash(slashQuery, sid ?? undefined)
-        if (seq === slashSeq.current) setSlashItems(items.slice(0, MAX_SLASH_SUGGESTIONS))
+        if (seq === slashSeq.current) setSlashItems(items.slice(0, MAX_SLASH_ITEMS))
       } catch {
         if (seq === slashSeq.current) setSlashItems(null)
       }
@@ -148,17 +148,24 @@ export default function Chat() {
     if (!trimmed.startsWith('/')) return
     try {
       const s = sid ?? (await ensureSession())
-      const d = await runCommand(trimmed, s)
-      const label = `/${d.display ?? d.name ?? trimmed.slice(1).split(/\s/)[0]}`
+      const out: SlashOutcome = await runCommand(trimmed, s)
 
-      if (d.type === 'send' && d.message) {
+      if (out.action === 'send' && out.text) {
+        // The gateway asked for this text to go through as a real turn.
         setInput('')
         setSlashItems(null)
-        await sendPrompt(d.message)
+        await sendPrompt(out.text)
         return
       }
-      const body = directiveToText(d)
-      pushLocalMessage(body ? `${label}\n${body}` : `${label} — ${d.notice ?? 'done'}`)
+      if (out.action === 'prefill' && out.text) {
+        // Review-then-send: drop it in the composer, don't send.
+        setInput(out.text)
+        setSlashItems(null)
+        return
+      }
+      if (out.action === 'show' && out.text) {
+        pushLocalMessage(out.text)
+      }
       setInput('')
       setSlashItems(null)
     } catch (e) {
@@ -276,6 +283,8 @@ export default function Chat() {
 
   const canSend = !!input.trim() && (!busy || steerMode)
   const isSlashMode = slashQuery !== null
+  const cmdCount = slashItems?.filter((i) => i.kind !== 'skill').length ?? 0
+  const skillCount = slashItems?.filter((i) => i.kind === 'skill').length ?? 0
 
   return (
     <SafeAreaView style={s.safe} edges={['bottom']}>
@@ -359,30 +368,44 @@ export default function Chat() {
           {/* Slash palette */}
           {slashItems && slashItems.length > 0 ? (
             <View style={s.slashPanel}>
-              <ScrollView keyboardShouldPersistTaps="handled" style={{ maxHeight: 210 }}>
+              <View style={s.slashHead}>
+                <Ionicons name="terminal-outline" size={13} color={C.accent} />
+                <Text style={s.slashHeadText}>
+                  {cmdCount} command{cmdCount === 1 ? '' : 's'} · {skillCount} skill{skillCount === 1 ? '' : 's'}
+                </Text>
+                <Text style={s.slashHint}>tap to fill</Text>
+              </View>
+              <ScrollView keyboardShouldPersistTaps="handled" style={{ maxHeight: 320 }}>
                 {slashItems.map((it, i) => {
-                  // complete.slash returns `text` without the leading slash.
+                  // complete.slash returns `text` without the leading slash
+                  // and `display` with it, for both commands and skills.
+                  const isSkill = it.kind === 'skill'
                   const label = it.display ?? (it.text.startsWith('/') ? it.text : `/${it.text}`)
                   const insertable = it.text.startsWith('/') ? it.text : `/${it.text}`
                   return (
                     <Pressable
-                      key={`${insertable}-${i}`}
+                      key={`${it.kind ?? 'c'}-${insertable}-${i}`}
                       style={({ pressed }) => [s.slashRow, pressed && s.slashRowPressed]}
                       onPress={() => {
                         setInput(insertable)
                         setSlashItems(null)
                       }}
-                      accessibilityLabel={label}
+                      accessibilityLabel={`${label}, ${isSkill ? 'skill' : 'command'}`}
                     >
-                      <Ionicons name="terminal-outline" size={14} color={C.textFaint} />
+                      <Ionicons
+                        name={isSkill ? 'sparkles-outline' : 'terminal-outline'}
+                        size={14}
+                        color={isSkill ? C.accent : C.textFaint}
+                      />
                       <View style={{ flex: 1 }}>
                         <Text style={s.slashName}>{label}</Text>
                         {it.meta ? (
-                          <Text style={s.slashMeta} numberOfLines={1}>
+                          <Text style={s.slashMeta} numberOfLines={2}>
                             {it.meta}
                           </Text>
                         ) : null}
                       </View>
+                      <Text style={s.slashKind}>{isSkill ? 'skill' : 'cmd'}</Text>
                     </Pressable>
                   )
                 })}
@@ -639,10 +662,14 @@ const s = StyleSheet.create({
     borderColor: C.border,
   },
   slashPanel: { borderTopWidth: 1, borderTopColor: C.borderSoft, backgroundColor: C.bgElev },
-  slashRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, paddingVertical: 9, minHeight: 42 },
+  slashHead: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 16, paddingVertical: 7, borderBottomWidth: 1, borderBottomColor: C.borderSoft },
+  slashHeadText: { color: C.accent, fontSize: 11, fontWeight: '800', letterSpacing: 0.5, flex: 1 },
+  slashHint: { color: C.textFaint, fontSize: 10.5 },
+  slashRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, paddingVertical: 8, minHeight: 44 },
   slashRowPressed: { backgroundColor: C.bgHover },
   slashName: { color: C.text, fontSize: 14, fontWeight: '600' },
-  slashMeta: { color: C.textFaint, fontSize: 11.5, marginTop: 1 },
+  slashMeta: { color: C.textFaint, fontSize: 11.5, marginTop: 1, lineHeight: 15 },
+  slashKind: { color: C.textFaint, fontSize: 9.5, fontWeight: '800', letterSpacing: 0.5, textTransform: 'uppercase' },
   sheet: { marginHorizontal: 12, marginBottom: 8, backgroundColor: C.bgElev, borderRadius: 16, padding: 14, borderWidth: 1, borderColor: C.border },
   sheetHead: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 },
   sheetTitle: { color: C.text, fontSize: 13.5, fontWeight: '700' },

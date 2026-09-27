@@ -36,7 +36,7 @@ export default function Skills() {
   }, [online])
 
   const skillList = useMemo(() => {
-    const q = query.trim().toLowerCase()
+    const q = query.trim().toLowerCase().replace(/^\//, '')
     return Object.entries(skills)
       .map(([name, meta]) => ({ name, ...meta }))
       .filter((s) => !q || s.name.toLowerCase().includes(q))
@@ -51,7 +51,10 @@ export default function Skills() {
   }, [commands, query])
 
   const run = (name: string) => {
-    router.push({ pathname: '/(tabs)/chat', params: { draft: `/${name} ` } } as never)
+    // Skill keys already carry a leading slash — normalise so the composer
+    // never ends up with "//airtable".
+    const bare = name.replace(/^\/+/, '')
+    router.push({ pathname: '/(tabs)/chat', params: { draft: `/${bare} ` } } as never)
   }
 
   return (

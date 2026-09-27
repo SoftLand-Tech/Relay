@@ -1,28 +1,29 @@
 /**
  * Slash command support.
  *
- * The gateway owns the registry — do not hardcode a command list. Fetch it at
- * runtime from `commands.catalog` (127 commands on the current build) and rank
- * completions with `complete.slash`, which is the same fuzzy scorer the desktop
- * app uses.
+ * The gateway owns the registry — never hardcode a command list. Fetch it at
+ * runtime from `commands.catalog` (127 commands + 85 skills on the current
+ * build) and rank completions with `complete.slash`, which is the same fuzzy
+ * scorer the desktop TUI uses.
+ *
+ * Wire facts established against a live gateway (do not guess these):
+ *  - `complete.slash` returns `text` WITHOUT the leading slash and `display`
+ *    WITH it, for both commands and skills. A bare "/" returns the whole
+ *    catalog (capped per kind server-side).
+ *  - `commands.catalog.skills` keys DO include the leading slash ("/airtable").
+ *    Building `/${key}` yields "//airtable", which the gateway rejects.
+ *  - Execution is split and the gateway enforces it:
+ *      built-ins  -> `slash.exec`   (params: { session_id, command })
+ *      skills     -> `command.dispatch` (slash.exec answers 4018
+ *                    "skill command: use command.dispatch")
+ *    `command.dispatch` is tried first and 4018 means "fall through".
  *
  * Contract source of truth:
  *   ~/.hermes/hermes-agent/apps/shared/src/gateway-contract.generated.ts
- *   hermes_cli/commands.py::COMMAND_REGISTRY
  */
 import { atom } from 'nanostores'
 import { rpc } from './gateway'
 import { log } from './log'
-
-export interface CommandDef {
-  name: string
-  description: string
-  category?: string
-  args_hint?: string
-  subcommands?: string[]
-  argument_mode?: 'options' | 'text' | 'mixed'
-  desktop?: string
-}
 
 export interface CatalogCommand {
   description: string
@@ -37,17 +38,6 @@ export interface SlashSkill {
   origin?: string
 }
 
-interface CatalogResult {
-  pairs?: Array<[string, string]>
-  sub?: Record<string, string[]>
-  canon?: Record<string, string>
-  commands?: Record<string, CatalogCommand>
-  categories?: Array<{ name: string; pairs: Array<[string, string]> }>
-  skills?: Record<string, SlashSkill>
-  skill_count?: number
-  warning?: string
-}
-
 export interface CompletionItem {
   text: string
   display?: string
@@ -58,15 +48,10 @@ export interface CompletionItem {
 
 // ── State ──────────────────────────────────────────────────────────────────
 
-/** Canonical name -> def, fetched once per connection. */
 export const commandCatalog = atom<Record<string, CatalogCommand>>({})
-/** Canonical name -> its declared subcommands, for first-arg completion. */
 export const commandSubcommands = atom<Record<string, string[]>>({})
-/** lowercase alias -> canonical name. */
 export const commandAliases = atom<Record<string, string>>({})
-/** Skill commands (`/<name>`) the agent exposes. */
 export const skillCommands = atom<Record<string, SlashSkill>>({})
-/** Grouped for the palette. */
 export const commandCategories = atom<Array<{ name: string; pairs: Array<[string, string]> }>>([])
 export const catalogWarning = atom<string>('')
 export const commandWarning = atom<string>('')
@@ -75,10 +60,7 @@ let loadedFor: string | null = null
 
 // ── Fetch ──────────────────────────────────────────────────────────────────
 
-/**
- * Load the command registry from the gateway. Safe to call often — it is a
- * no-op when the catalog is already loaded for this session.
- */
+/** Load the command registry. No-op when already loaded for this session. */
 export async function loadCatalog(opts?: { force?: boolean; sessionId?: string }): Promise<void> {
   if (!opts?.force && loadedFor) return
   try {
@@ -93,9 +75,20 @@ export async function loadCatalog(opts?: { force?: boolean; sessionId?: string }
     loadedFor = opts?.sessionId ?? '*'
     log('info', 'slash', `catalog: ${Object.keys(cmds).length} commands, ${Object.keys(res.skills ?? {}).length} skills`)
   } catch (err) {
-    log('error', 'slash', `commands.catalog failed: ${String(err)}`)
+    log('info', 'slash', `commands.catalog failed: ${String(err)}`)
     commandWarning.set(err instanceof Error ? err.message : 'Could not load commands')
   }
+}
+
+interface CatalogResult {
+  pairs?: Array<[string, string]>
+  sub?: Record<string, string[]>
+  canon?: Record<string, string>
+  commands?: Record<string, CatalogCommand>
+  categories?: Array<{ name: string; pairs: Array<[string, string]> }>
+  skills?: Record<string, SlashSkill>
+  skill_count?: number
+  warning?: string
 }
 
 export function resetCatalog() {
@@ -119,28 +112,36 @@ export interface ParsedCommand {
 
 export function parseSlashCommand(text: string): ParsedCommand | null {
   if (!text.startsWith('/')) return null
-  const raw = text
   const body = text.slice(1)
   const spaceIdx = body.search(/\s/)
   const name = (spaceIdx === -1 ? body : body.slice(0, spaceIdx)).toLowerCase()
   if (!name) return null
   const args = spaceIdx === -1 ? '' : body.slice(spaceIdx + 1).trim()
-  return { name, args, raw }
+  return { name, args, raw: text }
 }
 
-/** Map an alias/underscore variant to its canonical `/name`. */
+/**
+ * Collapse a user-typed command name to one canonical word, no slashes.
+ * Handles "//airtable" (skill keys already carry a slash) and "Airtable".
+ */
+export function normalizeCommandName(raw: string): string {
+  return raw.trim().replace(/^\/+/, '').toLowerCase()
+}
+
+/** Map an alias/underscore variant to its canonical name, no slash. */
 export function canonicalName(name: string): string {
-  const key = name.toLowerCase().replace(/^\//, '').replace(/_/g, '-')
+  const key = normalizeCommandName(name)
   const canon = commandAliases.get()
-  return canon[key] ?? key
+  return (canon[key] ?? canon[`/${key}`] ?? key).replace(/^\//, '')
 }
 
 // ── Completion ─────────────────────────────────────────────────────────────
 
 /**
- * Rank completions. Prefers the gateway's own scorer via `complete.slash`, and
- * falls back to a local prefix/substring match so the palette still works if
- * that call fails.
+ * Ranked completions from the gateway's own scorer — the same fuzzy ranking
+ * the desktop TUI uses, so a query like "/mo" also matches commands whose
+ * description mentions it. Falls back to a local prefix match if the call
+ * fails, so the palette still works offline.
  */
 export async function completeSlash(prefix: string, sessionId?: string): Promise<CompletionItem[]> {
   const text = prefix.startsWith('/') ? prefix : `/${prefix}`
@@ -151,7 +152,7 @@ export async function completeSlash(prefix: string, sessionId?: string): Promise
     })
     if (res?.items?.length) return res.items
   } catch (err) {
-    log('warn', 'slash', `complete.slash failed, using local match: ${String(err)}`)
+    log('info', 'slash', `complete.slash failed, using local match: ${String(err)}`)
   }
   return localComplete(text)
 }
@@ -159,39 +160,112 @@ export async function completeSlash(prefix: string, sessionId?: string): Promise
 function localComplete(text: string): CompletionItem[] {
   const body = text.slice(1)
   const spaceIdx = body.indexOf(' ')
-  const namePart = (spaceIdx === -1 ? body : body.slice(0, spaceIdx)).toLowerCase()
+  const namePart = (spaceIdx === -1 ? body : body.slice(0, spaceIdx)).toLowerCase().replace(/^\/+/, '')
   const cmds = commandCatalog.get()
   const canon = commandAliases.get()
 
   if (spaceIdx !== -1 && namePart) {
-    // First-arg completion from declared subcommands.
-    const canonical = canon[namePart] ?? namePart
-    const subs = commandSubcommands.get()[`/${canonical}`] ?? commandSubcommands.get()[`/${namePart}`] ?? []
+    const canonical = (canon[namePart] ?? namePart).replace(/^\//, '')
+    const subs = commandSubcommands.get()[`/${canonical}`] ?? []
     const argPart = body.slice(spaceIdx + 1).split(/\s/)[0].toLowerCase()
     return subs
       .filter((o) => !argPart || o.toLowerCase().startsWith(argPart))
       .slice(0, 20)
-      .map((o) => ({ text: `/${canonical} ${o}`, kind: 'option' }))
+      .map((o) => ({ text: o, display: `/${canonical} ${o}`, kind: 'option' }))
   }
 
   const out: CompletionItem[] = []
   for (const [name, def] of Object.entries(cmds)) {
     if (namePart && !name.toLowerCase().includes(namePart)) continue
-    out.push({ text: name, display: name, meta: def.description?.slice(0, 80), kind: 'command' })
-    if (out.length >= 40) break
+    out.push({ text: name, display: name.startsWith('/') ? name : `/${name}`, meta: def.description?.slice(0, 90), kind: 'command' })
+    if (out.length >= 60) break
   }
+  // Skill keys already carry the leading slash — do not add another.
   for (const [name, skill] of Object.entries(skillCommands.get())) {
     if (namePart && !name.toLowerCase().includes(namePart)) continue
-    out.push({ text: `/${name}`, display: `/${name}`, meta: `skill · ${skill.origin ?? 'local'}`, kind: 'skill' })
-    if (out.length >= 60) break
+    const bare = name.replace(/^\//, '')
+    out.push({ text: bare, display: `/${bare}`, meta: `skill · ${skill.origin ?? 'local'}`, kind: 'skill' })
+    if (out.length >= 90) break
   }
   return out
 }
 
-// ── Dispatch ───────────────────────────────────────────────────────────────
+// ── Execution ──────────────────────────────────────────────────────────────
 
-export interface DispatchDirective {
-  type: 'exec' | 'alias' | 'plugin' | 'send' | 'skill' | 'prefill' | 'none'
+export interface SlashOutcome {
+  /**
+   * show    — render `text` as a local message (command printed something)
+   * send    — send `text` as a real turn (the gateway asked for it)
+   * prefill — put `text` in the composer without sending
+   * none    — nothing to do
+   */
+  action: 'show' | 'send' | 'prefill' | 'none'
+  text: string
+  /** Canonical command name, for labelling the output. */
+  name: string
+}
+
+/**
+ * Run a slash command exactly the way the real Hermes does.
+ *
+ * Stage order mirrors the gateway: quick command -> plugin -> bundle -> skill
+ * (all via `command.dispatch`, which returns a directive), then built-ins via
+ * `slash.exec`. A 4018 from dispatch means "not one of mine" and is the
+ * signal to fall through — it is not an error.
+ */
+export async function runCommand(input: string, sessionId: string): Promise<SlashOutcome> {
+  const parsed = parseSlashCommand(input)
+  if (!parsed) return { action: 'none', text: '', name: '' }
+
+  const canonical = canonicalName(parsed.name)
+  const label = `/${canonical}`
+  const argText = parsed.args
+
+  // Skills and quick/plugin/bundle commands. Send the bare name — the
+  // gateway rejects "//name", and skill keys already carry a slash.
+  try {
+    const d = await rpc<DispatchDirective>('command.dispatch', {
+      name: canonical,
+      arg: argText || null,
+      session_id: sessionId,
+    })
+    if (d && d.type && d.type !== 'none') {
+      return directiveToOutcome(d, label)
+    }
+  } catch (err) {
+    const code = (err as { code?: number }).code
+    // 4018 = "not a quick/plugin/bundle/skill command" -> built-in, fall through.
+    // Anything else is a real failure worth surfacing (usage, permissions...).
+    if (code !== 4018 && code !== -32601) {
+      const msg = err instanceof Error ? err.message : String(err)
+      log('info', 'slash', `dispatch /${canonical} failed: ${msg}`)
+      return { action: 'show', text: `${label} — ${msg.replace(/^command\.dispatch:\s*/, '')}`, name: canonical }
+    }
+  }
+
+  // Built-in. `slash.exec` takes `command` as a single string.
+  const command = argText ? `${label} ${argText}` : label
+  try {
+    const res = await rpc<{ output?: string; warning?: string; type?: string; message?: string }>('slash.exec', {
+      session_id: sessionId,
+      command,
+    })
+    // slash.exec can reroute to a directive (queue/steer/goal/loop do this).
+    if (res?.type && !res.output) {
+      return directiveToOutcome(res as DispatchDirective, label)
+    }
+    if (res?.warning) log('info', 'slash', res.warning)
+    return { action: 'show', text: res?.output?.trim() || `${label} — done`, name: canonical }
+  } catch (err) {
+    // The gateway's own message is what Hermes would print — surface it in
+    // the chat rather than an alert, so it stays in the transcript.
+    const msg = err instanceof Error ? err.message : String(err)
+    return { action: 'show', text: `${label} — ${msg.replace(/^slash\.exec:\s*/, '')}`, name: canonical }
+  }
+}
+
+interface DispatchDirective {
+  type?: 'exec' | 'alias' | 'plugin' | 'send' | 'skill' | 'prefill' | 'none'
   output?: string
   target?: string
   message?: string
@@ -201,64 +275,22 @@ export interface DispatchDirective {
   status?: string
 }
 
-const SKIP_FALLTHROUGH = new Set(['/prefill', '/none'])
-
-/**
- * Run a slash command.
- *
- * Stage order matters and mirrors the gateway: quick command -> plugin ->
- * bundle -> skill -> built-in. `command.dispatch` handles the first four and
- * returns a directive; built-ins go through `slash.exec`, whose param is
- * `command` (not `name`).
- */
-export async function runCommand(input: string, sessionId: string): Promise<DispatchDirective> {
-  const parsed = parseSlashCommand(input)
-  if (!parsed) return { type: 'none' }
-
-  const canonical = canonicalName(parsed.name)
-  const spelled = `/${canonical}`
-
-  try {
-    const d = await rpc<DispatchDirective>('command.dispatch', {
-      name: parsed.name,
-      arg: parsed.args || null,
-      session_id: sessionId,
-    })
-    if (d && d.type && !SKIP_FALLTHROUGH.has(spelled)) {
-      if (d.type !== 'none') return d
-    }
-  } catch (err) {
-    // 4018 = "not a quick/plugin/bundle/skill command" — expected for built-ins.
-    const code = (err as { code?: number }).code
-    if (code !== undefined && code !== 4018 && code !== -32601) {
-      log('warn', 'slash', `command.dispatch failed: ${String(err)}`)
-    }
-  }
-
-  // Built-in. `slash.exec` takes `command` as a single string.
-  const command = parsed.args ? `${spelled} ${parsed.args}` : spelled
-  const res = await rpc<{ output?: string; warning?: string }>('slash.exec', {
-    session_id: sessionId,
-    command,
-  })
-
-  if (res?.warning) log('warn', 'slash', res.warning)
-  return { type: 'exec', output: res?.output ?? '', name: canonical }
-}
-
-/** Format a directive's output for a chat bubble. */
-export function directiveToText(d: DispatchDirective): string {
+function directiveToOutcome(d: DispatchDirective, label: string): SlashOutcome {
   switch (d.type) {
     case 'send':
-      return d.message ?? d.output ?? ''
+      // The gateway wants this text sent as a real turn (e.g. /queue <prompt>).
+      return { action: 'send', text: d.message ?? d.output ?? '', name: label }
     case 'prefill':
-      return d.output ?? d.message ?? ''
-    case 'alias':
-    case 'exec':
-    case 'plugin':
-    case 'skill':
-      return [d.output, d.notice].filter(Boolean).join('\n').trim() || (d.display ? `/${d.display}` : '')
+      // Put it in the composer for the user to review and send.
+      return { action: 'prefill', text: d.output ?? d.message ?? '', name: label }
+    case 'none':
+      return { action: 'none', text: '', name: label }
     default:
-      return ''
+      // exec / alias / plugin / skill — all print something.
+      return {
+        action: 'show',
+        text: [d.output, d.notice].filter(Boolean).join('\n').trim() || `${label} — done`,
+        name: label,
+      }
   }
 }
