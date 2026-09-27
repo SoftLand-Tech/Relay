@@ -5,6 +5,7 @@ import { rpc, onEvent, onServerRequest, getClient } from './gateway'
 import { log } from './log'
 import { notifyLocal, setBadge } from './push'
 import { bindLiveId, upsertOptimisticRow } from './sessionList'
+import { hookModelState, noteSessionInfo } from './modelState'
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -352,12 +353,13 @@ const CREATE_COLS = 120
  * only ever send keys listed in SessionCreateParams.
  */
 export async function createSession(title?: string): Promise<ResumeResult> {
-  const res = await rpc<{ session_id?: string; stored_session_id?: string; messages?: Array<Record<string, unknown>> }>(
+  const res = await rpc<{ session_id?: string; stored_session_id?: string; messages?: Array<Record<string, unknown>>; info?: { model?: string; provider?: string } }>(
     'session.create',
     { title: title || 'Hermes Pocket', cols: CREATE_COLS, source: 'mobile' },
   )
   const id = res?.session_id
   if (!id) throw new Error('session.create returned no id')
+  noteSessionInfo(res.info)
   const storedId = res.stored_session_id ?? id
   await rememberStoredId(id, storedId)
   bindLiveId(storedId, id)
@@ -374,12 +376,13 @@ export async function createSession(title?: string): Promise<ResumeResult> {
  * and what we persist), returns the LIVE id used for RPCs and events.
  */
 export async function resumeSession(storedId: string): Promise<ResumeResult> {
-  const res = await rpc<{ session_id?: string; stored_session_id?: string; messages?: Array<Record<string, unknown>> }>(
+  const res = await rpc<{ session_id?: string; stored_session_id?: string; messages?: Array<Record<string, unknown>>; info?: { model?: string; provider?: string } }>(
     'session.resume',
     { session_id: storedId, cols: CREATE_COLS },
   )
   const id = res?.session_id
   if (!id) throw new Error('session.resume returned no id')
+  noteSessionInfo(res.info)
   const newStored = res.stored_session_id ?? storedId
   await rememberStoredId(id, newStored)
   bindLiveId(newStored, id)
@@ -774,6 +777,9 @@ export function hookChatEvents() {
   if (chatHooked) return
   chatHooked = true
 
+  // Live model/provider tracking (session.info events).
+  hookModelState()
+
   // Server->client requests. Handled separately from events.
   onServerRequest(onServerRequestMessage)
 
@@ -800,6 +806,10 @@ export function hookChatEvents() {
         if (typeof p.stored_session_id === 'string' && p.stored_session_id) {
           void rememberStoredId(sid, p.stored_session_id)
         }
+        noteSessionInfo({
+          model: typeof p.model === 'string' ? p.model : undefined,
+          provider: typeof p.provider === 'string' ? p.provider : undefined,
+        })
         break
       }
 

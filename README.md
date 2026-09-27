@@ -62,6 +62,29 @@ Dispatch mirrors the gateway's stage order: quick command → plugin → bundle 
 skill → built-in. Built-ins run through `slash.exec` (`command.dispatch` answers
 `4018` for them, which the app treats as "fall through", not an error).
 
+**Interactive pickers.** Bare commands that the gateway could only answer with
+usage text open native UI instead:
+
+- `/model` opens the model picker: provider → model → scope. The inventory is
+  `model.options` (featured models, capability chips, $/Mtok pricing,
+  unavailable models disabled); the switch is `config.set { key: 'model',
+  value: '<model> --provider <slug> <--session|--global|--once>' }` — the same
+  string the gateway's own `/model` parser reads, so scope needs no client-side
+  logic. Guarded switches (expensive models) round-trip `confirm_required` →
+  `confirm_expensive_model: true`, and a switch while the agent runs is
+  reported as deferred to the next turn. Unconfigured providers take an API key
+  in the sheet via `model.save_key`. The current model also shows as a chip in
+  the chat header.
+- Every command the catalog marks `argument_mode: options` / `mixed`
+  (`/reasoning`, `/fast`, `/approvals`, `/personality`, `/queue`, …) opens a
+  subcommand chooser. Static lists come from the catalog's `sub`; dynamic ones
+  (personality names, skins…) load from `complete.slash` with a trailing space.
+  `mixed` commands also take free text.
+
+The live model/provider tracks `session.info` events and `session.create` /
+`session.resume` results, and the "Model & reasoning" screen reuses the same
+picker.
+
 ## Multi-session
 
 Each conversation is an independent `SessionState`: its own messages, tool

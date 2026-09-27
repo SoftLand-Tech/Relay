@@ -45,7 +45,10 @@ import {
   type ToolItem,
 } from '../../src/lib/chat'
 import { isConnected as isConnectedAtom, connectionState, gatewayError, retryNow } from '../../src/lib/gateway'
-import { completeSlash, loadCatalog, runCommand, type CompletionItem, type SlashOutcome } from '../../src/lib/slash'
+import { completeSlash, loadCatalog, runCommand, parseSlashCommand, canonicalName, interactiveTarget, describeCommand, subsFor, argumentModeFor, type CompletionItem, type SlashOutcome } from '../../src/lib/slash'
+import { liveModel } from '../../src/lib/modelState'
+import { ModelPickerSheet } from '../../src/components/ModelPickerSheet'
+import { CommandOptionsSheet } from '../../src/components/CommandOptionsSheet'
 import { MessageBubble, ThinkingPanel, ToolRow } from '../../src/components/Chat'
 import { ScreenShell } from '../../src/components/ScreenShell'
 import { C } from '../../src/lib/theme'
@@ -74,6 +77,7 @@ export default function Chat() {
   const online = useStore(isConnectedAtom)
   const conn = useStore(connectionState)
   const gerr = useStore(gatewayError)
+  const curModel = useStore(liveModel)
   const [input, setInput] = useState('')
   const [steerMode, setSteerMode] = useState(false)
   const [answerText, setAnswerText] = useState('')
@@ -82,6 +86,8 @@ export default function Chat() {
   const [stick, setStick] = useState(true)
   const [showScrollBtn, setShowScrollBtn] = useState(false)
   const [slashItems, setSlashItems] = useState<CompletionItem[] | null>(null)
+  const [modelPickerOpen, setModelPickerOpen] = useState(false)
+  const [optionSheet, setOptionSheet] = useState<{ command: string; allowText: boolean } | null>(null)
   const listRef = useRef<FlatList>(null)
   const insets = useSafeAreaInsets()
   const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY)
@@ -146,6 +152,29 @@ export default function Chat() {
   const runSlash = async (text: string) => {
     const trimmed = text.trim()
     if (!trimmed.startsWith('/')) return
+
+    // Bare commands the gateway can only answer with usage text get a native
+    // picker instead: /model opens the full provider/model/scope sheet, and
+    // every command the catalog marks options/mixed opens its subcommand
+    // chooser. Typed arguments keep the typed path untouched.
+    const parsed = parseSlashCommand(trimmed)
+    if (parsed && !parsed.args) {
+      const canonical = canonicalName(parsed.name)
+      const target = interactiveTarget(canonical, parsed.args)
+      if (target === 'model-picker') {
+        setInput('')
+        setSlashItems(null)
+        setModelPickerOpen(true)
+        return
+      }
+      if (target === 'options') {
+        setInput('')
+        setSlashItems(null)
+        setOptionSheet({ command: canonical, allowText: argumentModeFor(canonical) === 'mixed' })
+        return
+      }
+    }
+
     try {
       const s = sid ?? (await ensureSession())
       const out: SlashOutcome = await runCommand(trimmed, s)
@@ -288,7 +317,23 @@ export default function Chat() {
 
   return (
     <SafeAreaView style={s.safe} edges={['bottom']}>
-      <ScreenShell title={title || 'Hermes'} onSearch={() => router.push('/(tabs)/sessions')}>
+      <ScreenShell
+        title={title || 'Hermes'}
+        onSearch={() => router.push('/(tabs)/sessions')}
+        right={
+          curModel ? (
+            <Pressable
+              style={s.modelChip}
+              onPress={() => setModelPickerOpen(true)}
+              hitSlop={6}
+              accessibilityLabel={`Current model ${curModel}. Tap to change`}
+            >
+              <Ionicons name="cube-outline" size={12} color={C.accent} />
+              <Text style={s.modelChipText} numberOfLines={1}>{curModel}</Text>
+            </Pressable>
+          ) : null
+        }
+      >
         <KeyboardAvoidingView
           style={s.root}
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -628,6 +673,30 @@ export default function Chat() {
               </Pressable>
             ) : null}
           </View>
+
+          {/* Interactive pickers — /model and options/mixed commands */}
+          <ModelPickerSheet open={modelPickerOpen} onClose={() => setModelPickerOpen(false)} />
+          {optionSheet ? (
+            <CommandOptionsSheet
+              command={optionSheet.command}
+              description={describeCommand(optionSheet.command)}
+              choices={subsFor(optionSheet.command).map((v) => ({ value: v }))}
+              allowText={optionSheet.allowText}
+              loadChoices={async () => {
+                // Dynamic options (personalities, skins, handoff targets…)
+                // come from the gateway's own completion scorer.
+                const items = await completeSlash(`/${optionSheet.command} `, sid ?? undefined)
+                return items
+                  .filter((it) => it.text && !it.text.startsWith('/'))
+                  .map((it) => ({ value: it.text, meta: it.meta }))
+              }}
+              onRun={(commandLine) => {
+                setOptionSheet(null)
+                void runSlash(commandLine)
+              }}
+              onClose={() => setOptionSheet(null)}
+            />
+          ) : null}
         </KeyboardAvoidingView>
       </ScreenShell>
     </SafeAreaView>
@@ -662,6 +731,19 @@ const s = StyleSheet.create({
     borderColor: C.border,
   },
   slashPanel: { borderTopWidth: 1, borderTopColor: C.borderSoft, backgroundColor: C.bgElev },
+  modelChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    maxWidth: 148,
+    height: 30,
+    paddingHorizontal: 10,
+    borderRadius: 15,
+    backgroundColor: C.bgCard,
+    borderWidth: 1,
+    borderColor: C.border,
+  },
+  modelChipText: { color: C.textDim, fontSize: 11.5, fontWeight: '700', flexShrink: 1 },
   slashHead: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 16, paddingVertical: 7, borderBottomWidth: 1, borderBottomColor: C.borderSoft },
   slashHeadText: { color: C.accent, fontSize: 11, fontWeight: '800', letterSpacing: 0.5, flex: 1 },
   slashHint: { color: C.textFaint, fontSize: 10.5 },

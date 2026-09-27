@@ -22,8 +22,17 @@
  *   ~/.hermes/hermes-agent/apps/shared/src/gateway-contract.generated.ts
  */
 import { atom } from 'nanostores'
-import { rpc } from './gateway'
 import { log } from './log'
+
+// src/lib/gateway pulls react-native storage, which plain node (scripts/)
+// cannot load — so it is imported lazily and scripts can inject a fake with
+// _useGatewayForTests() before calling anything that talks to the wire.
+type GatewayModule = typeof import('./gateway')
+let gwOverride: GatewayModule | null = null
+export function _useGatewayForTests(g: GatewayModule | null) { gwOverride = g }
+async function gw(): Promise<GatewayModule> {
+  return gwOverride ?? import('./gateway')
+}
 
 export interface CatalogCommand {
   description: string
@@ -63,6 +72,7 @@ let loadedFor: string | null = null
 /** Load the command registry. No-op when already loaded for this session. */
 export async function loadCatalog(opts?: { force?: boolean; sessionId?: string }): Promise<void> {
   if (!opts?.force && loadedFor) return
+  const { rpc } = await gw()
   try {
     const res = await rpc<CatalogResult>('commands.catalog', opts?.sessionId ? { session_id: opts.sessionId } : {})
     const cmds = res.commands ?? {}
@@ -135,6 +145,57 @@ export function canonicalName(name: string): string {
   return (canon[key] ?? canon[`/${key}`] ?? key).replace(/^\//, '')
 }
 
+// ── Interactive hints (from the gateway's own registry) ────────────────────
+
+/**
+ * The composer mode the gateway declares for a command — "options" means the
+ * argument is one of `subsFor()`, "mixed" adds free text on top. The desktop
+ * composer reads the same field (hermes_cli/commands.py::infer_argument_mode),
+ * so the app never hardcodes which commands want a picker.
+ */
+export function argumentModeFor(canonical: string): 'options' | 'mixed' | 'text' | null {
+  const cmds = commandCatalog.get()
+  const def = cmds[canonical] ?? cmds[`/${canonical}`]
+  const mode = def?.argument_mode
+  return mode === 'options' || mode === 'mixed' || mode === 'text' ? mode : null
+}
+
+/** Subcommand choices the gateway lists for a command (e.g. /reasoning levels). */
+export function subsFor(canonical: string): string[] {
+  const key = `/${canonical}`
+  const fromSub = commandSubcommands.get()[key] ?? commandSubcommands.get()[canonical]
+  if (fromSub?.length) return fromSub
+  const cmds = commandCatalog.get()
+  const def = cmds[canonical] ?? cmds[`/${canonical}`]
+  return def?.subcommands ?? []
+}
+
+/** Catalog description for a canonical command name ('' when unknown). */
+export function describeCommand(canonical: string): string {
+  const cmds = commandCatalog.get()
+  const def = cmds[canonical] ?? cmds[`/${canonical}`]
+  return def?.description ?? ''
+}
+
+/**
+ * What native UI a bare `/command` should open instead of the gateway's
+ * usage text. `model` gets the full provider/model/scope picker; commands the
+ * gateway marks options/mixed get a subcommand chooser — static `sub` lists
+ * when the catalog has them, dynamic ones via `complete.slash` when not
+ * (e.g. /personality lists the personality names). Everything else runs
+ * through the gateway as before (text commands often work bare: /new, /reset…).
+ */
+export function interactiveTarget(
+  canonical: string,
+  args: string,
+): 'model-picker' | 'options' | null {
+  if (args) return null
+  if (canonical === 'model') return 'model-picker'
+  const mode = argumentModeFor(canonical)
+  if (mode === 'options' || mode === 'mixed') return 'options'
+  return null
+}
+
 // ── Completion ─────────────────────────────────────────────────────────────
 
 /**
@@ -146,6 +207,7 @@ export function canonicalName(name: string): string {
 export async function completeSlash(prefix: string, sessionId?: string): Promise<CompletionItem[]> {
   const text = prefix.startsWith('/') ? prefix : `/${prefix}`
   try {
+    const { rpc } = await gw()
     const res = await rpc<{ items?: CompletionItem[]; replace_from?: number }>('complete.slash', {
       text,
       ...(sessionId ? { session_id: sessionId } : {}),
@@ -217,6 +279,7 @@ export async function runCommand(input: string, sessionId: string): Promise<Slas
   const parsed = parseSlashCommand(input)
   if (!parsed) return { action: 'none', text: '', name: '' }
 
+  const { rpc } = await gw()
   const canonical = canonicalName(parsed.name)
   const label = `/${canonical}`
   const argText = parsed.args
