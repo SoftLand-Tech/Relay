@@ -9,10 +9,26 @@ import { hookModelState, noteSessionInfo } from './modelState'
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
+/** One block of an assistant message's content, in order. */
+export interface ChatSegment {
+  kind: 'thinking' | 'text'
+  text: string
+  /** thinking only — ms timestamp of the segment's first delta. */
+  startedAt?: number
+  /** thinking only — raw chars received (text is capped; this isn't). */
+  chars?: number
+  /** thinking only — frozen "8s · ~52 tok/s" once the segment ends. */
+  meta?: string
+}
+
 export interface ChatMessage {
   id: string
   role: 'user' | 'assistant'
+  /** Full answer text (all text segments joined) — what copy/speak/search use. */
   text: string
+  /** Assistant content in order: thinking blocks interleave with the text
+   *  they precede. `text` is the joined text segments, kept in sync. */
+  segments?: ChatSegment[]
   streaming?: boolean
   ts: number
   status?: 'ok' | 'failed'
@@ -63,19 +79,14 @@ export interface SessionState {
   /** Durable id in the gateway's store (used to resume in a later app launch). */
   storedId: string
   /** Wall-clock ms this session was created locally, for ordering chats
-   *  before the server's `started_at` is known. Never sort by `lastSeq` —
-   *  that counter is per-session and meaningless across conversations. */
+   *  before the server's `started_at` is known. (Event-seq watermarks for
+   *  reconnect replay live in JsonRpcGatewayClient — storing a per-event seq
+   *  here re-rendered the UI at event rate, and the gateway's per-session
+   *  counter is meaningless across conversations anyway.) */
   createdAtMs: number
   title: string
   messages: ChatMessage[]
   tools: ToolItem[]
-  thinking: string
-  /** "8s · ~52 tok/s" — recomputed on each stream flush while thinking runs. */
-  thinkMeta: string
-  /** When the current thinking phase started, for the tok/s estimate. */
-  thinkingStartedAt: number
-  /** Raw chars received this phase (~4 chars ≈ 1 token). */
-  thinkingChars: number
   todos: TodoItem[]
   usage: string
   busy: boolean
@@ -85,7 +96,6 @@ export interface SessionState {
    * transparently resumes it from its stored id.
    */
   detached?: boolean
-  lastSeq: number
 }
 
 const EMPTY: SessionState = {
@@ -95,14 +105,9 @@ const EMPTY: SessionState = {
   title: '',
   messages: [],
   tools: [],
-  thinking: '',
-  thinkMeta: '',
-  thinkingStartedAt: 0,
-  thinkingChars: 0,
   todos: [],
   usage: '',
   busy: false,
-  lastSeq: 0,
 }
 
 // ── Storage keys ───────────────────────────────────────────────────────────
@@ -139,8 +144,6 @@ const view = computed([sessionsById, activeSession], (map, id): SessionState =>
 
 export const messages = computed(view, (s) => s.messages)
 export const tools = computed(view, (s) => s.tools)
-export const thinking = computed(view, (s) => s.thinking)
-export const thinkMeta = computed(view, (s) => s.thinkMeta)
 export const todos = computed(view, (s) => s.todos)
 export const usage = computed(view, (s) => s.usage)
 export const agentBusy = computed(view, (s) => s.busy)
@@ -238,14 +241,14 @@ function makeSession(id: string, storedId: string, title = '', createdAtMs = Dat
 
 // ── Stream batching ────────────────────────────────────────────────────────
 //
-// `thinking.delta` / `reasoning.delta` / `message.delta` can arrive 30+ times
-// per second from a fast model. Applying each delta as its own store patch
-// re-renders the whole chat screen that many times per second, which is how
-// streaming ended up feeling slower than the model actually was. Deltas are
-// now buffered per session and flushed to the store at ~8 Hz — one patch,
-// one re-render — and flushed synchronously on every terminal event.
+// `thinking.delta` / `reasoning.delta` / `message.delta` arrive coalesced by
+// the gateway at ~30 Hz (its WS transport batches per 33 ms — see
+// tui_gateway/ws.py `_TOKEN_COALESCE_S`). Streaming rows render as a single
+// plain-Text node, so one store patch per server flush batch is cheap and the
+// stream reads like the CLI's per-token output. The buffer exists to absorb
+// burst-delivered frames into one render; terminal events flush synchronously.
 
-const FLUSH_MS = 120
+const FLUSH_MS = 33
 
 interface StreamBuf {
   thinking: string
@@ -281,39 +284,72 @@ function flushStreams() {
     buf.text = ''
     const s = sessionsById.get()[sid]
     if (!s) continue
+    if (!thinking && !text) continue
 
-    let messages = s.messages
-    if (text) {
-      messages = [...messages]
-      let patched = false
-      for (let i = messages.length - 1; i >= 0; i--) {
-        if (messages[i].role === 'assistant' && messages[i].streaming) {
-          messages[i] = { ...messages[i], text: (messages[i].text + text).slice(0, 32000), streaming: true }
-          patched = true
-          break
+    // Both streams land on the tail assistant bubble as ORDERED segments:
+    // think → answer, and a model that re-thinks after emitting text opens a
+    // NEW thinking block below that output instead of appending to the first.
+    let messages = [...s.messages]
+    let i = messages.length - 1
+    while (i >= 0 && !(messages[i].role === 'assistant' && messages[i].streaming)) i--
+    if (i < 0) {
+      messages.push({ id: nid(), role: 'assistant', text: '', streaming: true, ts: Date.now() })
+      i = messages.length - 1
+    }
+    const m = messages[i]
+    const segments: ChatSegment[] = m.segments ? [...m.segments] : (m.text ? [{ kind: 'text', text: m.text }] : [])
+
+    if (thinking) {
+      const last = segments[segments.length - 1]
+      if (last?.kind === 'thinking') {
+        segments[segments.length - 1] = {
+          ...last,
+          text: (last.text + thinking).slice(-8000),
+          chars: (last.chars ?? 0) + thinking.length,
         }
-      }
-      if (!patched) {
-        messages.push({ id: nid(), role: 'assistant', text: text.slice(0, 32000), streaming: true, ts: Date.now() })
+      } else {
+        segments.push({ kind: 'thinking', text: thinking.slice(-8000), startedAt: Date.now(), chars: thinking.length })
       }
     }
-    const thinkingChars = thinking ? s.thinkingChars + thinking.length : s.thinkingChars
-    const thinkMeta = thinking
-      ? formatThinkMeta(s.thinkingStartedAt, thinkingChars)
-      : s.thinkMeta
-    patchSession(sid, {
-      messages,
-      thinking: thinking ? (s.thinking + thinking).slice(-4000) : s.thinking,
-      thinkingChars,
-      thinkMeta,
-    })
+    if (text) {
+      const last = segments[segments.length - 1]
+      if (last?.kind === 'text') {
+        segments[segments.length - 1] = { ...last, text: (last.text + text).slice(0, 32000) }
+      } else {
+        // Thinking resolved into output — freeze that block's meta at its end.
+        if (last?.kind === 'thinking' && !last.meta) {
+          segments[segments.length - 1] = { ...last, meta: formatThinkMeta(last.startedAt ?? 0, last.chars ?? 0) }
+        }
+        segments.push({ kind: 'text', text })
+      }
+    }
+
+    const fullText = segments
+      .filter((seg) => seg.kind === 'text')
+      .map((seg) => seg.text)
+      .join('')
+    messages[i] = { ...m, text: fullText.slice(0, 32000), segments }
+    patchSession(sid, { messages })
   }
 }
 
-/** "~52 tok/s" style progress for the thinking panel. ~4 chars ≈ 1 token. */
-function formatThinkMeta(startedAt: number, chars: number): string {
+/** Freeze elapsed/tok-s meta on thinking segments that never got text after them. */
+function freezeThoughts(m: ChatMessage): ChatMessage {
+  if (!m.segments?.some((seg) => seg.kind === 'thinking' && !seg.meta)) return m
+  return {
+    ...m,
+    segments: m.segments.map((seg) =>
+      seg.kind === 'thinking' && !seg.meta
+        ? { ...seg, meta: formatThinkMeta(seg.startedAt ?? 0, seg.chars ?? seg.text.length) }
+        : seg),
+  }
+}
+
+/** "8s · ~52 tok/s" style progress. ~4 chars ≈ 1 token. `now` is injectable
+ *  so the live block can tick its elapsed counter on its own heartbeat. */
+export function formatThinkMeta(startedAt: number, chars: number, now: number = Date.now()): string {
   if (!startedAt || !chars) return ''
-  const secs = Math.max(1, Math.round((Date.now() - startedAt) / 1000))
+  const secs = Math.max(1, Math.round((now - startedAt) / 1000))
   const tps = Math.round(chars / 4 / secs)
   return chars > 240 && tps > 0 ? `${secs}s · ~${tps} tok/s` : `${secs}s`
 }
@@ -337,9 +373,17 @@ async function loadCachedTranscript(id: string) {
   try {
     const raw = await AsyncStorage.getItem(transcriptKey(id))
     if (!raw) return
-    const list = JSON.parse(raw) as ChatMessage[]
+    const list = JSON.parse(raw) as Array<ChatMessage & { thinking?: string; thinkMeta?: string }>
     if (Array.isArray(list) && list.length) {
-      patchSession(id, { messages: list.slice(-MAX_MESSAGES) })
+      // Transcripts from the interim build carried a single `thinking` field —
+      // normalize into ordered segments.
+      const normalized = list.map((m) => {
+        if (m.segments || typeof m.thinking !== 'string' || !m.thinking.trim()) return m
+        const segments: ChatSegment[] = [{ kind: 'thinking', text: m.thinking, meta: m.thinkMeta }]
+        if (m.text) segments.push({ kind: 'text', text: m.text })
+        return { ...m, segments }
+      })
+      patchSession(id, { messages: normalized.slice(-MAX_MESSAGES) })
     }
   } catch {
     /* best effort */
@@ -630,7 +674,6 @@ export async function sendPrompt(rawText: string) {
     patchActive({
       messages: [...messages.get(), { id: nid(), role: 'user', text, ts: Date.now() }],
       tools: [],
-      thinking: '',
       busy: true,
     })
     void persistSession(sid)
@@ -879,11 +922,6 @@ export function hookChatEvents() {
 
   onEvent((e) => {
     const p = (e.payload ?? {}) as Record<string, unknown>
-    const seq = e.seq
-    if (typeof seq === 'number' && Number.isFinite(seq)) {
-      const sid = e.session_id
-      if (sid && sessionsById.get()[sid]) patchSession(sid, { lastSeq: seq })
-    }
 
     const eSid = e.session_id
     if (!eSid) return
@@ -963,15 +1001,15 @@ export function hookChatEvents() {
 
       case 'message.start': {
         flushStreams()
-        const list = s.messages
+        // Re-read: flushStreams just replaced the messages array; the `s`
+        // captured at handler top is stale by one flush.
+        const cur = sessionsById.get()[eSid]
+        if (!cur) break
+        const list = cur.messages
         const last = list[list.length - 1]
         if (last?.role === 'assistant' && last.streaming) break
         patchSession(eSid, {
           messages: [...list, { id: nid(), role: 'assistant', text: '', streaming: true, ts: Date.now() }],
-          thinking: '',
-          thinkMeta: '',
-          thinkingStartedAt: Date.now(),
-          thinkingChars: 0,
         })
         break
       }
@@ -988,25 +1026,32 @@ export function hookChatEvents() {
       case 'message.complete': {
         flushStreams()
         const text = typeof p.text === 'string' ? p.text : ''
-        const list = [...s.messages]
+        const cur = sessionsById.get()[eSid]
+        if (!cur) break
+        const list = [...cur.messages]
         for (let i = list.length - 1; i >= 0; i--) {
-          if (list[i].role === 'assistant' && list[i].streaming) {
-            const finalText = (text || list[i].text).slice(0, 32000)
-            const failed = p.status === 'error' || !!p.error
-            list[i] = {
-              ...list[i],
-              text: finalText,
-              streaming: false,
-              status: failed ? 'failed' : 'ok',
-              error: failed ? String(p.error ?? p.failure_reason ?? 'Turn failed') : undefined,
-            }
-            break
+          if (list[i].role !== 'assistant' || !list[i].streaming) continue
+          const failed = p.status === 'error' || !!p.error
+          let done: ChatMessage = {
+            ...list[i],
+            streaming: false,
+            status: failed ? 'failed' : 'ok',
+            error: failed ? String(p.error ?? p.failure_reason ?? 'Turn failed') : undefined,
           }
+          if (text) {
+            // Server-sent final text supersedes the streamed segments' text.
+            const segs = (done.segments ?? []).map((seg) => ({ ...seg }))
+            const lastTextIdx = segs.map((seg) => seg.kind).lastIndexOf('text')
+            if (lastTextIdx >= 0) segs[lastTextIdx] = { ...segs[lastTextIdx], text: text.slice(0, 32000) }
+            else segs.push({ kind: 'text', text: text.slice(0, 32000) })
+            done = { ...done, segments: segs, text: text.slice(0, 32000) }
+          }
+          list[i] = freezeThoughts(done)
+          break
         }
         if (list.length) patchSession(eSid, { messages: list })
         patchSession(eSid, {
-          tools: s.tools.map((t) => (t.status === 'running' ? { ...t, status: 'done' as const } : t)),
-          thinking: '',
+          tools: cur.tools.map((t) => (t.status === 'running' ? { ...t, status: 'done' as const } : t)),
           busy: false,
         })
         sending = false
@@ -1033,12 +1078,6 @@ export function hookChatEvents() {
           preview: p.preview ? String(p.preview).slice(0, 200) : undefined,
           status: 'running',
         })
-        break
-      }
-
-      case 'tool.generating': {
-        // The model is still emitting the call's arguments.
-        patchSession(eSid, { thinking: s.thinking })
         break
       }
 
@@ -1103,10 +1142,12 @@ export function hookChatEvents() {
       case 'error': {
         flushStreams()
         const msg = String(p.message ?? p.error ?? 'Gateway error')
-        const list = [...s.messages]
+        const cur = sessionsById.get()[eSid]
+        if (!cur) break
+        const list = [...cur.messages]
         const last = list[list.length - 1]
         if (last?.streaming) {
-          list[list.length - 1] = { ...last, streaming: false, text: last.text || msg }
+          list[list.length - 1] = freezeThoughts({ ...last, streaming: false, text: last.text || msg })
         } else {
           list.push({ id: nid(), role: 'assistant', text: msg, ts: Date.now(), status: 'failed', error: msg })
         }

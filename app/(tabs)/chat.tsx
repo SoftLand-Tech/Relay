@@ -23,8 +23,6 @@ import { useFocusEffect, router, useLocalSearchParams } from 'expo-router'
 import {
   messages,
   tools,
-  thinking,
-  thinkMeta,
   agentBusy,
   pendingRequest,
   usage,
@@ -51,7 +49,7 @@ import { completeSlash, loadCatalog, runCommand, parseSlashCommand, canonicalNam
 import { liveModel, liveReasoning } from '../../src/lib/modelState'
 import { ModelPickerSheet } from '../../src/components/ModelPickerSheet'
 import { CommandOptionsSheet } from '../../src/components/CommandOptionsSheet'
-import { MessageBubble, ThinkingPanel, ToolRow } from '../../src/components/Chat'
+import { MessageBubble, ToolRow } from '../../src/components/Chat'
 import { ScreenShell } from '../../src/components/ScreenShell'
 import { C } from '../../src/lib/theme'
 
@@ -68,7 +66,6 @@ const MAX_SLASH_ITEMS = 120
 export default function Chat() {
   const msgs = useStore(messages)
   const tls = useStore(tools)
-  const think = useStore(thinking)
   const busy = useStore(agentBusy)
   const req = useStore(pendingRequest)
   const use = useStore(usage)
@@ -76,7 +73,6 @@ export default function Chat() {
   const qb = useStore(outbox)
   const title = useStore(activeTitle)
   const sid = useStore(activeSession)
-  const tmeta = useStore(thinkMeta)
   const online = useStore(isConnectedAtom)
   const conn = useStore(connectionState)
   const gerr = useStore(gatewayError)
@@ -129,11 +125,14 @@ export default function Chat() {
 
   useEffect(() => {
     if (!stick) return
+    // One frame of defer so the freshly grown content has laid out before we
+    // measure it. Must stay shorter than the 33 ms stream-flush interval, or
+    // the timer is cancelled forever and following stops mid-stream.
     // Non-animated while streaming: an animated scroll re-fired every flush
     // fights itself and makes the stream look slower than it is.
-    const t = setTimeout(() => listRef.current?.scrollToEnd?.({ animated: !busy }), 80)
+    const t = setTimeout(() => listRef.current?.scrollToEnd?.({ animated: !busy }), 16)
     return () => clearTimeout(t)
-  }, [msgs.length, msgs[msgs.length - 1]?.text, tls.length, think.length, stick, busy])
+  }, [msgs.length, msgs[msgs.length - 1]?.text, msgs[msgs.length - 1]?.segments?.length, tls.length, stick, busy])
 
   // ── Slash palette ──────────────────────────────────────────────────────
   const slashQuery = input.startsWith('/') ? input.split('\n')[0] : null
@@ -324,17 +323,26 @@ export default function Chat() {
   // Stable row renderer: without this, every stream flush re-created the
   // closure and re-rendered every visible bubble, not just the growing one.
   const onRetryMsg = useCallback((id: string) => { void retryMessage(id).catch(() => {}) }, [])
+  // Stable so MessageBubble's memo holds across stream flushes.
+  const onEffortPress = useCallback(() => { setOptionSheet({ command: 'reasoning', allowText: false }) }, [])
   const renderMsg = useCallback(
-    ({ item }: { item: ChatMessage }) => <MessageBubble m={item} onRetry={onRetryMsg} />,
-    [onRetryMsg],
+    ({ item }: { item: ChatMessage }) => (
+      <MessageBubble m={item} onRetry={onRetryMsg} effort={curEffort || undefined} onEffortPress={onEffortPress} />
+    ),
+    [onRetryMsg, onEffortPress, curEffort],
   )
   // FlatList contract: with a stable renderItem, memoized cells only
   // re-evaluate when `extraData` changes. Without this, streaming updates
   // never reach the rows on Fabric — text piles up invisibly until the turn
   // ends ("waits, then dumps the whole reply"). Derived from message state so
-  // it changes exactly when a row's content can have.
+  // it changes exactly when a row's content can have: text length, thinking
+  // size (reasoning can grow without the answer text changing), segment count
+  // (a re-think after output adds a block).
   const extraData = msgs
-    .map((m) => `${m.id}:${m.text.length}:${m.streaming ? 's' : ''}:${m.status ?? ''}`)
+    .map((m) => {
+      const thinkChars = m.segments?.reduce((n, seg) => n + (seg.kind === 'thinking' ? seg.text.length : 0), 0) ?? 0
+      return `${m.id}:${m.text.length}:${thinkChars}:${m.segments?.length ?? 0}:${m.streaming ? 's' : ''}:${m.status ?? ''}`
+    })
     .join('|')
 
   return (
@@ -406,19 +414,12 @@ export default function Chat() {
             }
           />
 
-          {/* Run status — quiet, above the composer. */}
-          {(tls.length > 0 || (think.length > 0 && busy) || td.length > 0) ? (
+          {/* Run status — quiet, above the composer. Reasoning lives on the
+              message itself now (collapsed "Thinking" block), not here. */}
+          {(tls.length > 0 || td.length > 0) ? (
             <View style={s.runFooter}>
               {tls.slice(-3).map((t: ToolItem) => <ToolRow key={t.id} t={t} />)}
               {tls.length > 3 ? <Text style={s.moreTools}>+{tls.length - 3} more</Text> : null}
-              {think.length > 0 && busy ? (
-                <ThinkingPanel
-                  text={think}
-                  meta={tmeta}
-                  effort={curEffort || undefined}
-                  onEffortPress={curEffort ? () => setOptionSheet({ command: 'reasoning', allowText: false }) : undefined}
-                />
-              ) : null}
               {td.length > 0 ? (
                 <View style={s.todos}>
                   {td.slice(0, 4).map((t, i) => (

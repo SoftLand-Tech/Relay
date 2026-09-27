@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { View, Text, StyleSheet, Pressable, ActivityIndicator } from 'react-native'
 // The maintained fork. The original `react-native-markdown-display` pins
 // markdown-it 10, which does `require('punycode')` — a Node builtin that
@@ -11,7 +11,13 @@ import * as Speech from 'expo-speech'
 import { Ionicons } from '@expo/vector-icons'
 import { speakText, stopTts } from '../lib/voice'
 import { C } from '../lib/theme'
-import type { ChatMessage, ToolItem } from '../lib/chat'
+import { formatThinkMeta, type ChatMessage, type ChatSegment, type ToolItem } from '../lib/chat'
+
+/** A message's renderable content: explicit segments, else its plain text. */
+function segmentsOf(m: ChatMessage): ChatSegment[] {
+  if (m.segments?.length) return m.segments
+  return m.text ? [{ kind: 'text', text: m.text }] : []
+}
 
 function fmtTime(ts: number): string {
   try {
@@ -41,11 +47,20 @@ const mdStyles = {
 } as never
 
 /**
- * Memoized: the chat screen re-renders on every stream flush (~8 Hz while a
+ * Memoized: the chat screen re-renders on every stream flush (~30 Hz while a
  * fast model streams). Memo keeps untouched bubbles from re-rendering, so
- * only the growing bubble (new object identity) does work.
+ * only the growing bubble (new object identity) does work. `onRetry` /
+ * `onEffortPress` must be stable callbacks or every flush re-renders every row.
  */
-export const MessageBubble = React.memo(function MessageBubble({ m, onRetry }: { m: ChatMessage; onRetry?: (id: string) => void }) {
+export const MessageBubble = React.memo(function MessageBubble({
+  m, onRetry, effort, onEffortPress,
+}: {
+  m: ChatMessage
+  onRetry?: (id: string) => void
+  /** Live reasoning effort — forwarded to the thinking block while streaming. */
+  effort?: string
+  onEffortPress?: () => void
+}) {
   const isUser = m.role === 'user'
   const [copied, setCopied] = useState(false)
   const [speakState, setSpeakState] = useState<'idle' | 'loading' | 'playing'>('idle')
@@ -87,9 +102,30 @@ export const MessageBubble = React.memo(function MessageBubble({ m, onRetry }: {
 
   // ChatGPT renders the assistant unboxed and full width; only the user gets a bubble.
   if (!isUser) {
+    const segs = segmentsOf(m)
+    const lastIdx = segs.length - 1
     return (
       <View style={s.botWrap}>
-        <Markdown style={mdStyles}>{m.text || (m.streaming ? '' : '')}</Markdown>
+        {segs.map((seg, i) =>
+          seg.kind === 'thinking' ? (
+            <ThinkingBlock
+              key={i}
+              seg={seg}
+              live={m.streaming && i === lastIdx}
+              effort={effort}
+              onEffortPress={onEffortPress}
+            />
+          ) : m.streaming && i === lastIdx ? (
+            // Plain Text while streaming: Markdown re-creates the message's whole
+            // native view tree on every stream flush, and that churn starves the
+            // JS thread until flushes stop landing mid-turn ("all at once at the
+            // end"). One Text node is trivial to re-render; the full Markdown
+            // render happens once, when the segment completes.
+            <Text key={i} style={s.streamText}>{seg.text}</Text>
+          ) : (
+            <Markdown key={i} style={mdStyles}>{seg.text}</Markdown>
+          ),
+        )}
         {m.streaming ? <Text style={s.cursor}>▍</Text> : null}
         {m.status === 'failed' ? (
           <View style={s.failedRow}>
@@ -139,40 +175,65 @@ export const MessageBubble = React.memo(function MessageBubble({ m, onRetry }: {
   )
 })
 
-export const ThinkingPanel = React.memo(function ThinkingPanel({
-  text, meta, effort, onEffortPress,
+/**
+ * One reasoning segment of an assistant message — the ChatGPT-style collapsed
+ * block. Hidden by default: collapsed renders only the header line, so even
+ * long transcripts with reasoning stay cheap; the text mounts only while
+ * expanded.
+ *
+ * While `live` (this block is the message's actively growing tail) the header
+ * runs its own 1 Hz heartbeat so the elapsed counter keeps counting through
+ * silent stretches — tool calls, gateway clumping — instead of only advancing
+ * when a chunk happens to land. The tok/s estimate still tracks real chars.
+ */
+export const ThinkingBlock = React.memo(function ThinkingBlock({
+  seg, live, effort, onEffortPress,
 }: {
-  text: string
-  meta?: string
+  seg: ChatSegment
+  /** True while this block is the message's actively growing tail. */
+  live?: boolean
   /** Live reasoning effort — the lever on thinking length. */
   effort?: string
   /** Opens the /reasoning chooser; config.set applies it mid-session. */
   onEffortPress?: () => void
 }) {
   const [open, setOpen] = useState(false)
-  if (!text.trim()) return null
-  const short = open ? text.slice(-4000) : text.length > 400 ? text.slice(-400) : text
+  const [now, setNow] = useState(() => Date.now())
+  const hasText = !!seg.text.trim()
+  useEffect(() => {
+    if (!live || !hasText) return
+    const t = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(t)
+  }, [live, hasText])
+  if (!hasText) return null
+  const meta = live ? formatThinkMeta(seg.startedAt ?? 0, seg.chars ?? seg.text.length, now) : seg.meta
   return (
-    <Pressable onPress={() => setOpen(!open)} accessibilityLabel={open ? 'Collapse thinking' : 'Expand thinking'}>
-      <View style={s.think}>
-        <View style={s.thinkHead}>
-          <Ionicons name={open ? 'chevron-down' : 'chevron-forward'} size={12} color={C.textFaint} />
-          <Text style={s.thinkLabel}>Thinking{meta ? ` · ${meta}` : ''}</Text>
-          {effort && onEffortPress ? (
-            <Pressable
-              hitSlop={6}
-              style={s.effortChip}
-              onPress={onEffortPress}
-              accessibilityLabel={`Reasoning effort ${effort}. Tap to change`}
-            >
-              <Text style={s.effortChipText}>effort: {effort}</Text>
-            </Pressable>
-          ) : null}
-        </View>
-        <Text style={s.thinkText} numberOfLines={open ? undefined : 4}>
-          {short}
+    <Pressable
+      onPress={() => setOpen(!open)}
+      accessibilityLabel={open ? 'Collapse thinking' : 'Expand thinking'}
+      style={s.think}
+    >
+      <View style={s.thinkHead}>
+        <Ionicons name={open ? 'chevron-down' : 'chevron-forward'} size={12} color={C.textFaint} />
+        {live ? <ActivityIndicator size="small" color={C.textFaint} style={s.thinkSpin} /> : null}
+        <Text style={s.thinkLabel}>
+          {live ? 'Thinking' : 'Thought'}
+          {meta ? ` · ${meta}` : ''}
         </Text>
+        {live && effort && onEffortPress ? (
+          <Pressable
+            hitSlop={6}
+            style={s.effortChip}
+            onPress={onEffortPress}
+            accessibilityLabel={`Reasoning effort ${effort}. Tap to change`}
+          >
+            <Text style={s.effortChipText}>effort: {effort}</Text>
+          </Pressable>
+        ) : null}
       </View>
+      {open ? (
+        <Text style={s.thinkText}>{seg.text.length > 4000 ? seg.text.slice(-4000) : seg.text}</Text>
+      ) : null}
     </Pressable>
   )
 })
@@ -202,6 +263,7 @@ const s = StyleSheet.create({
   userWrap: { paddingHorizontal: 16, paddingVertical: 6, alignItems: 'flex-end' },
   userBubble: { backgroundColor: C.userBubble, borderRadius: 20, paddingHorizontal: 16, paddingVertical: 10, maxWidth: '88%' },
   userText: { color: C.text, fontSize: 16, lineHeight: 23 },
+  streamText: { color: C.text, fontSize: 16, lineHeight: 24 },
   cursor: { color: C.textDim, fontSize: 15, marginTop: 2 },
   botActions: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 6, marginLeft: -6 },
   iconBtn: { width: 30, height: 30, alignItems: 'center', justifyContent: 'center', borderRadius: 15 },
@@ -210,10 +272,11 @@ const s = StyleSheet.create({
   failedText: { color: C.red, fontSize: 12.5, flexShrink: 1 },
   retryBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: C.bgCard, borderRadius: 14, paddingHorizontal: 10, height: 30 },
   retryText: { color: C.text, fontSize: 12, fontWeight: '700' },
-  think: { marginHorizontal: 16, marginVertical: 4, backgroundColor: C.bgCard, borderRadius: 12, padding: 10 },
-  thinkHead: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 4 },
+  think: { backgroundColor: C.bgCard, borderRadius: 12, padding: 10, marginBottom: 8 },
+  thinkHead: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  thinkSpin: { transform: [{ scale: 0.7 }] },
   thinkLabel: { color: C.textFaint, fontSize: 11.5, fontWeight: '600' },
-  thinkText: { color: C.textDim, fontSize: 12.5, lineHeight: 18 },
+  thinkText: { color: C.textDim, fontSize: 12.5, lineHeight: 18, marginTop: 6 },
   effortChip: { marginLeft: 'auto', backgroundColor: C.bgHover, borderRadius: 10, paddingHorizontal: 7, paddingVertical: 2 },
   effortChipText: { color: C.textFaint, fontSize: 10, fontWeight: '700' },
   toolRow: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 16, paddingVertical: 4 },
