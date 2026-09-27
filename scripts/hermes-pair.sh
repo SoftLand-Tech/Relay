@@ -6,8 +6,8 @@
 #
 #   Env: HERMES_HOST, HERMES_PORT, HERMES_DASHBOARD_SESSION_TOKEN / HERMES_TOKEN
 #
-# The phone app: open Hermes Pocket → "Scan pairing QR from your PC",
-# or paste the hermes://connect?... link manually.
+# The phone app: open Hermes Pocket → "Scan QR code",
+# or paste the hermes://connect?... link manually (More options).
 set -eu
 
 HOST="${HERMES_HOST:-}"

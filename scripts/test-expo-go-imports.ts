@@ -110,11 +110,23 @@ stub('expo-file-system', new Proxy({}, { get: () => async () => '' }))
 stub('expo-haptics', { impactAsync: async () => {}, notificationAsync: async () => {}, ImpactFeedbackStyle: {}, NotificationFeedbackType: {} })
 stub('react-native-safe-area-context', { SafeAreaView: () => null, useSafeAreaInsets: () => ({ top: 0, bottom: 0 }) })
 stub('react-native-markdown-display', { default: () => null })
-stub('react', { createElement: () => null, useState: () => [null, () => {}], useEffect: () => {}, useRef: () => ({ current: null }), useCallback: (f: unknown) => f, useMemo: (f: () => unknown) => f(), Fragment: null, default: {} })
+const reactStub: Record<string, unknown> = {
+  createElement: () => null,
+  useState: () => [null, () => {}],
+  useEffect: () => {},
+  useRef: () => ({ current: null }),
+  useCallback: (f: unknown) => f,
+  useMemo: (f: () => unknown) => f(),
+  memo: (f: unknown) => f,
+  Fragment: null,
+}
+reactStub.default = reactStub
+stub('react', reactStub)
 
 const routes = [
   'app/index.tsx',
   'app/_layout.tsx',
+  'app/add-computer.tsx',
   'app/(tabs)/_layout.tsx',
   'app/(tabs)/chat.tsx',
   'app/(tabs)/sessions.tsx',

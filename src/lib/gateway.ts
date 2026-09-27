@@ -221,7 +221,7 @@ export async function switchToServer(id: string): Promise<void> {
   if (!srv) throw new Error('This computer is no longer saved.')
   const token = await readTokenFor(srv.id)
   if (!token) throw new Error('No saved token for this computer — pair again.')
-  await dial({ host: srv.host, token, tls: srv.tls })
+  await connect({ host: srv.host, token, tls: srv.tls })
 }
 
 /** Remove one remembered computer. Forgets the active connection if it was ours. */
@@ -260,16 +260,29 @@ export async function loadSavedConfig(): Promise<ConnConfig | null> {
         const c = JSON.parse(legacy) as ConnConfig
         if (c?.host && c?.token) {
           await saveConfig({ host: c.host, token: c.token, tls: !!c.tls })
-          await AsyncStorage.removeItem(LEGACY_KEY)
           log('info', 'auth', 'migrated legacy connection to SecureStore')
-          const loaded = await readStored()
-          if (loaded) { connConfig.set(loaded); return loaded }
         }
       } catch {}
       await AsyncStorage.removeItem(LEGACY_KEY)
     }
     const loaded = await readStored()
-    if (loaded) connConfig.set(loaded)
+    if (loaded) {
+      connConfig.set(loaded)
+      // Seed the remembered-computers list from pre–multi-server installs.
+      const list = await readServerList()
+      if (!list.length || !list.some((s) => s.host === loaded.host && s.tls === loaded.tls)) {
+        try { await upsertServer(loaded) } catch (err) { log('warn', 'auth', `server-list seed failed: ${String(err)}`) }
+      }
+      // Reconcile: the config we are about to boot into is by definition the
+      // latest/active computer — never let the pointer drift from it.
+      const fresh = await readServerList()
+      const active = fresh.find((s) => s.host === loaded.host && s.tls === loaded.tls)
+      if (active && activeServerId.get() !== active.id) {
+        activeServerId.set(active.id)
+        try { await AsyncStorage.setItem(ACTIVE_SERVER_KEY, active.id) } catch {}
+      }
+    }
+    await refreshServers()
     return loaded
   } catch (err) {
     log('error', 'auth', `loadSavedConfig failed: ${String(err)}`)
@@ -388,6 +401,9 @@ async function dial(c: ConnConfig, opts?: { isRetry?: boolean }): Promise<void> 
   gatewayError.set(null)
   connectionState.set('connecting')
   await saveConfig(v)
+  // Remember this computer (even if it's unreachable right now — it should
+  // still show up in the saved list once the phone can reach it again).
+  try { await upsertServer(v) } catch (err) { log('warn', 'auth', `remember computer failed: ${String(err)}`) }
 
   if (!v.tls && !isLocalHost(v.host)) {
     log('warn', 'gateway', 'plain ws:// to non-local host — token travels unencrypted')

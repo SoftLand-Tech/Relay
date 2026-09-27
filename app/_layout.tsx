@@ -1,13 +1,15 @@
 import React, { useEffect, useState } from 'react'
 import { Stack, router } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
-import { View, ActivityIndicator, Text, Pressable, StyleSheet, AppState } from 'react-native'
+import { View, ActivityIndicator, Text, Pressable, StyleSheet, AppState, Modal } from 'react-native'
 import { useStore } from '@nanostores/react'
 import * as Linking from 'expo-linking'
 import { initPush, lastNotificationResponse, onNotificationResponse } from '../src/lib/push'
 import {
   isConnected as isConnectedAtom, connectionState, connConfig, loadSavedConfig,
-  connect, gatewayError, clearConfig, retryNow, disconnect, reconnectAttempt, onForeground, redactedUrl,
+  connect, gatewayError, retryNow, disconnect, reconnectAttempt, onForeground, redactedUrl,
+  servers as serversStore, activeServerId, refreshServers, switchToServer,
+  forgetActiveServer, mostRecentServer, type SavedServer,
 } from '../src/lib/gateway'
 import { hookChatEvents, loadOutbox } from '../src/lib/chat'
 import { parseConnectUrl } from '../src/lib/pairing'
@@ -20,11 +22,25 @@ export default function RootLayout() {
   const attempt = useStore(reconnectAttempt)
   const online = useStore(isConnectedAtom)
   const [linkMsg, setLinkMsg] = useState<string | null>(null)
+  const [showServers, setShowServers] = useState(false)
+  const savedServers = useStore(serversStore)
+  const activeId = useStore(activeServerId)
+
+  const forgetAndFallBack = async () => {
+    disconnect()
+    const remaining = await forgetActiveServer()
+    const next = mostRecentServer(remaining)
+    if (next) {
+      try { await switchToServer(next.id); return } catch {}
+    }
+    router.replace('/')
+  }
 
   useEffect(() => {
     hookChatEvents()
     void loadOutbox()
     void initPush()
+    void refreshServers()
     let cancelled = false
     ;(async () => {
       const saved = await loadSavedConfig()
@@ -97,6 +113,7 @@ export default function RootLayout() {
       >
         <Stack.Screen name="index" options={{ headerShown: false }} />
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        <Stack.Screen name="add-computer" options={{ headerShown: false, presentation: 'modal' }} />
       </Stack>
       {!online && state !== 'idle' ? (
         <View style={s.overlay}>
@@ -112,10 +129,15 @@ export default function RootLayout() {
                 <Pressable style={s.btn} onPress={() => { void retryNow().catch(() => {}) }}>
                   <Text style={s.btnText}>Retry</Text>
                 </Pressable>
-                <Pressable style={s.ghostBtn} onPress={async () => { disconnect(); await clearConfig(); router.replace('/') }}>
-                  <Text style={s.ghostText}>Forget</Text>
-                </Pressable>
+                {savedServers.length > 1 ? (
+                  <Pressable style={s.ghostBtn} onPress={() => setShowServers(true)}>
+                    <Text style={s.ghostText}>Computers…</Text>
+                  </Pressable>
+                ) : null}
               </View>
+              <Pressable style={s.ghostBtn} onPress={() => { void forgetAndFallBack() }}>
+                <Text style={s.ghostText}>Forget this computer</Text>
+              </Pressable>
             </>
           ) : connecting ? (
             <>
@@ -131,6 +153,36 @@ export default function RootLayout() {
       {linkMsg ? (
         <View style={s.toast}><Text style={s.toastText}>{linkMsg}</Text></View>
       ) : null}
+
+      <Modal visible={showServers} transparent animationType="fade" onRequestClose={() => setShowServers(false)}>
+        <View style={s.pickerScrim}>
+          <View style={s.pickerCard}>
+            <Text style={s.pickerTitle}>Your computers</Text>
+            {savedServers.length === 0 ? (
+              <Text style={s.pickerEmpty}>No other computers saved.</Text>
+            ) : (
+              savedServers.slice().sort((a, b) => b.lastUsedAt - a.lastUsedAt).map((sv) => (
+                <Pressable
+                  key={sv.id}
+                  style={[s.pickerRow, sv.id === activeId && s.pickerRowActive]}
+                  onPress={() => { setShowServers(false); void switchToServer(sv.id).catch(() => {}) }}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Switch to ${sv.name}`}
+                >
+                  <View style={{ flex: 1 }}>
+                    <Text style={s.pickerName} numberOfLines={1}>{sv.name}</Text>
+                    <Text style={s.pickerHost} numberOfLines={1}>{sv.tls ? 'WSS' : 'WS'} · {sv.host}</Text>
+                  </View>
+                  {sv.id === activeId ? <Text style={s.pickerActive}>current</Text> : null}
+                </Pressable>
+              ))
+            )}
+            <Pressable style={s.ghostBtn} onPress={() => setShowServers(false)}>
+              <Text style={s.ghostText}>Cancel</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
     </View>
   )
 }
@@ -147,4 +199,13 @@ const s = StyleSheet.create({
   connecting: { color: C.textDim, marginTop: 14, marginBottom: 8 },
   toast: { position: 'absolute', bottom: 40, left: 20, right: 20, backgroundColor: C.bgElev, borderRadius: 12, padding: 14, borderWidth: 1, borderColor: C.border },
   toastText: { color: C.text, fontSize: 13.5, textAlign: 'center' },
+  pickerScrim: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', alignItems: 'center', justifyContent: 'center', padding: 24 },
+  pickerCard: { width: '100%', maxWidth: 420, backgroundColor: C.bgElev, borderRadius: 16, padding: 18, borderWidth: 1, borderColor: C.border, gap: 8 },
+  pickerTitle: { color: C.text, fontSize: 16, fontWeight: '800', marginBottom: 4 },
+  pickerEmpty: { color: C.textDim, fontSize: 14, paddingVertical: 10 },
+  pickerRow: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: C.inputBg, borderRadius: 12, borderWidth: 1, borderColor: C.border, paddingHorizontal: 14, paddingVertical: 12, minHeight: 56 },
+  pickerRowActive: { borderColor: C.accent },
+  pickerName: { color: C.text, fontSize: 14.5, fontWeight: '700' },
+  pickerHost: { color: C.textFaint, fontSize: 12, marginTop: 2 },
+  pickerActive: { color: C.accent, fontSize: 12, fontWeight: '700' },
 })
