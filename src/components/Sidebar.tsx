@@ -1,5 +1,5 @@
-import React, { useEffect, useRef, useState } from 'react'
-import { View, Text, Pressable, StyleSheet, Animated, ScrollView, useWindowDimensions } from 'react-native'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
+import { View, Text, Pressable, StyleSheet, Animated, FlatList, TextInput, useWindowDimensions } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { C } from '../lib/theme'
@@ -38,6 +38,10 @@ interface Props {
  * Implemented as an overlay rather than a Drawer navigator: the app already
  * routes through expo-router tabs, and an overlay keeps that intact while
  * giving the same "drawer slides over the conversation" behaviour.
+ *
+ * All sessions live here — the nav rows stay for screens (Chat, Automations,
+ * Skills, Models, Settings) and the list below is the session switcher, with
+ * local title search for fast filtering.
  */
 export function Sidebar({ open, onClose, onOpen, nav, recent, onNav, onNewChat, onOpenChat, footer }: Props) {
   const { width } = useWindowDimensions()
@@ -47,10 +51,12 @@ export function Sidebar({ open, onClose, onOpen, nav, recent, onNav, onNewChat, 
   const [mounted, setMounted] = useState(open)
   // ChatGPT's panel is ~300dp, capped so it never looks empty on a tablet.
   const panelWidth = Math.min(width * 0.82, 320)
+  const [query, setQuery] = useState('')
 
   useEffect(() => {
     if (open) {
       setMounted(true)
+      setQuery('')
       Animated.timing(anim, { toValue: 1, duration: 220, useNativeDriver: true }).start()
       return
     }
@@ -60,6 +66,12 @@ export function Sidebar({ open, onClose, onOpen, nav, recent, onNav, onNewChat, 
     })
     onOpen?.()
   }, [open, anim])
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    if (!q) return recent
+    return recent.filter((c) => c.title.toLowerCase().includes(q))
+  }, [recent, query])
 
   const translateX = anim.interpolate({ inputRange: [0, 1], outputRange: [-panelWidth, 0] })
 
@@ -84,12 +96,7 @@ export function Sidebar({ open, onClose, onOpen, nav, recent, onNav, onNewChat, 
           </Pressable>
         </View>
 
-        <ScrollView
-          style={{ flex: 1 }}
-          contentContainerStyle={{ paddingBottom: 12 }}
-          showsVerticalScrollIndicator={false}
-          onStartShouldSetResponder={() => false}
-        >
+        <View>
           {nav.map((item) => (
             <Pressable
               key={item.key}
@@ -109,13 +116,37 @@ export function Sidebar({ open, onClose, onOpen, nav, recent, onNav, onNewChat, 
               ) : null}
             </Pressable>
           ))}
+        </View>
 
-          {recent.length > 0 ? (
-            <>
-              <View style={s.divider} />
-              {recent.map((c) => (
+        {recent.length > 0 ? (
+          <>
+            <View style={s.searchWrap}>
+              <Ionicons name="search" size={14} color={C.textFaint} />
+              <TextInput
+                style={s.searchInput}
+                value={query}
+                onChangeText={setQuery}
+                placeholder="Search chats…"
+                placeholderTextColor={C.textFaint}
+                autoCorrect={false}
+                autoCapitalize="none"
+                accessibilityLabel="Search chats"
+              />
+              {query ? (
+                <Pressable onPress={() => setQuery('')} hitSlop={8} accessibilityLabel="Clear search">
+                  <Ionicons name="close" size={14} color={C.textFaint} />
+                </Pressable>
+              ) : null}
+            </View>
+            <FlatList
+              data={filtered}
+              keyExtractor={(c) => c.id}
+              style={{ flex: 1 }}
+              contentContainerStyle={{ paddingBottom: 8 }}
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              renderItem={({ item: c }) => (
                 <Pressable
-                  key={c.id}
                   onPress={() => {
                     onOpenChat(c.id)
                     onClose()
@@ -129,10 +160,15 @@ export function Sidebar({ open, onClose, onOpen, nav, recent, onNav, onNewChat, 
                   </Text>
                   {c.unread ? <View style={s.unreadDot} /> : null}
                 </Pressable>
-              ))}
-            </>
-          ) : null}
-        </ScrollView>
+              )}
+              ListEmptyComponent={
+                query ? <Text style={s.noMatch}>No chats matching “{query.trim()}”</Text> : null
+              }
+            />
+          </>
+        ) : (
+          <View style={{ flex: 1 }} />
+        )}
 
         {footer}
 
@@ -193,7 +229,20 @@ const s = StyleSheet.create({
     justifyContent: 'center',
   },
   badgeText: { color: '#fff', fontSize: 11, fontWeight: '800' },
-  divider: { height: 1, backgroundColor: C.borderSoft, marginVertical: 10, marginHorizontal: 16 },
+  searchWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginHorizontal: 12,
+    marginVertical: 8,
+    paddingHorizontal: 12,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: C.bgCard,
+    borderWidth: 1,
+    borderColor: C.borderSoft,
+  },
+  searchInput: { flex: 1, color: C.text, fontSize: 14, paddingVertical: 0, minHeight: 36 },
   recentRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -206,6 +255,7 @@ const s = StyleSheet.create({
   recentTitleActive: { color: C.text, fontWeight: '600' },
   busyDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: C.greenSoft },
   unreadDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: C.accent },
+  noMatch: { color: C.textFaint, fontSize: 13, paddingHorizontal: 16, paddingVertical: 12 },
   newChat: {
     flexDirection: 'row',
     alignItems: 'center',

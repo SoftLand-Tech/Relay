@@ -160,7 +160,7 @@ export default function Controls() {
 
   return (
     <SafeAreaView style={s.frame} edges={['bottom']}>
-      <ScreenShell title="Controls" showBrand>
+      <ScreenShell title="Models" showBrand>
         {body}
       </ScreenShell>
       <ModelPickerSheet open={pickerOpen} onClose={() => setPickerOpen(false)} />

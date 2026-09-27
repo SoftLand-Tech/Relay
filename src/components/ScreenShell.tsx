@@ -15,7 +15,7 @@ import {
   switchToSession,
   sessionsById,
 } from '../lib/chat'
-import { loadCatalog, skillCommands } from '../lib/slash'
+import { loadCatalog } from '../lib/slash'
 import { loadSessions, sessionRows } from '../lib/sessionList'
 
 /**
@@ -47,7 +47,6 @@ export function ScreenShell({
   const busy = useStore(busyStoredIds)
   const current = useStore(activeStoredId)
   const all = useStore(sessionsById)
-  const skills = useStore(skillCommands)
   const rows = useStore(sessionRows)
 
   // The drawer's chat list comes from the gateway, so it has to be fetched.
@@ -69,20 +68,13 @@ export function ScreenShell({
     void loadCatalog().catch(() => {})
   }, [])
 
-  const nav = useMemo<NavItem[]>(() => {
-    const items: NavItem[] = [
-      { key: 'chat', label: 'Chat', icon: 'chatbubble-outline' },
-      { key: 'sessions', label: 'Chats', icon: 'chatbubbles-outline' },
-      { key: 'automations', label: 'Automations', icon: 'timer-outline' },
-      { key: 'skills', label: 'Skills', icon: 'sparkles-outline' },
-      { key: 'agent', label: 'Model & reasoning', icon: 'options-outline' },
-    ]
-    if (skills && Object.keys(skills).length) {
-      items[3] = { ...items[3], badge: Object.keys(skills).length }
-    }
-    items.push({ key: 'settings', label: 'Settings', icon: 'settings-outline' })
-    return items
-  }, [skills])
+  const nav = useMemo<NavItem[]>(() => [
+    { key: 'chat', label: 'Chat', icon: 'chatbubble-outline' },
+    { key: 'automations', label: 'Automations', icon: 'timer-outline' },
+    { key: 'skills', label: 'Skills', icon: 'sparkles-outline' },
+    { key: 'agent', label: 'Models', icon: 'cube-outline' },
+    { key: 'settings', label: 'Settings', icon: 'settings-outline' },
+  ], [])
 
   const recent = useMemo<RecentChat[]>(() => {
     // The server list is the source of truth: it covers every stored
@@ -109,7 +101,9 @@ export function ScreenShell({
         active: s.storedId === current,
       }))
 
-    return [...locals, ...fromServer].slice(0, 40)
+    // Uncapped: the sidebar's own search filters this list, and server rows
+    // are bounded by the session.list fetch anyway.
+    return [...locals, ...fromServer]
   }, [rows, all, pending, busy, current])
 
   const go = useCallback(
@@ -117,15 +111,13 @@ export function ScreenShell({
       const route =
         key === 'chat'
           ? '/(tabs)/chat'
-          : key === 'sessions'
-            ? '/(tabs)/sessions'
-            : key === 'automations'
-              ? '/(tabs)/automations'
-              : key === 'skills'
-                ? '/(tabs)/skills'
-                : key === 'agent'
-                  ? '/(tabs)/agent'
-                  : '/(tabs)/settings'
+          : key === 'automations'
+            ? '/(tabs)/automations'
+            : key === 'skills'
+              ? '/(tabs)/skills'
+              : key === 'agent'
+                ? '/(tabs)/agent'
+                : '/(tabs)/settings'
       router.push(route as never)
     },
     [router],
