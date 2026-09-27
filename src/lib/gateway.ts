@@ -16,6 +16,24 @@ const TLS_KEY = 'hermes.connection.tls.v2'
 const TOKEN_KEY = 'hermes.gateway.token'
 const LEGACY_KEY = 'hermes.connection.v1'
 
+// Remembered computers — the list survives pairing more than one machine.
+const SERVERS_KEY = 'hermes.servers.v1'
+const ACTIVE_SERVER_KEY = 'hermes.activeServer.v1'
+const SERVER_TOKEN_PREFIX = 'hermes.server.token.'
+
+/** A paired computer. Tokens live per-id in SecureStore, never in this list. */
+export interface SavedServer {
+  id: string
+  name: string
+  host: string
+  tls: boolean
+  addedAt: number
+  lastUsedAt: number
+}
+
+export const servers = atom<SavedServer[]>([])
+export const activeServerId = atom<string | null>(null)
+
 export const connectionState = atom<ConnectionState>('idle')
 export const connConfig = atom<ConnConfig | null>(null)
 export const gatewayError = atom<string | null>(null)
@@ -113,6 +131,124 @@ function isLocalHost(host: string): boolean {
 
 async function secureAvailable(): Promise<boolean> {
   try { return await SecureStore.isAvailableAsync() } catch { return false }
+}
+
+// ---- Remembered computers --------------------------------------------------
+
+function newServerId(): string {
+  return `srv_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`
+}
+
+async function readServerList(): Promise<SavedServer[]> {
+  try {
+    const raw = await AsyncStorage.getItem(SERVERS_KEY)
+    const parsed = raw ? (JSON.parse(raw) as SavedServer[]) : []
+    return Array.isArray(parsed) ? parsed.filter((s) => s && s.id && s.host) : []
+  } catch {
+    return []
+  }
+}
+
+async function writeServerList(list: SavedServer[]): Promise<void> {
+  await AsyncStorage.setItem(SERVERS_KEY, JSON.stringify(list))
+  servers.set(list)
+}
+
+async function readTokenFor(id: string): Promise<string | null> {
+  const key = SERVER_TOKEN_PREFIX + id
+  if (await secureAvailable()) {
+    try { return await SecureStore.getItemAsync(key) } catch { return null }
+  }
+  try { return await AsyncStorage.getItem(key) } catch { return null }
+}
+
+async function writeTokenFor(id: string, token: string): Promise<void> {
+  const key = SERVER_TOKEN_PREFIX + id
+  if (await secureAvailable()) {
+    await SecureStore.setItemAsync(key, token)
+    return
+  }
+  try { await AsyncStorage.setItem(key, token) } catch {}
+}
+
+async function deleteTokenFor(id: string): Promise<void> {
+  const key = SERVER_TOKEN_PREFIX + id
+  try { await SecureStore.deleteItemAsync(key) } catch {}
+  try { await AsyncStorage.removeItem(key) } catch {}
+}
+
+/** Sync the reactive atoms from storage. Cheap — call at boot and after mutations. */
+export async function refreshServers(): Promise<SavedServer[]> {
+  const list = await readServerList()
+  servers.set(list)
+  if (!activeServerId.get()) {
+    try {
+      const raw = await AsyncStorage.getItem(ACTIVE_SERVER_KEY)
+      if (raw && list.some((s) => s.id === raw)) activeServerId.set(raw)
+    } catch {}
+  }
+  return list
+}
+
+/** Add (or refresh) a paired computer and mark it the active one. */
+async function upsertServer(c: ConnConfig): Promise<SavedServer> {
+  const list = await readServerList()
+  const now = Date.now()
+  let srv = list.find((s) => s.host === c.host && s.tls === c.tls)
+  if (srv) {
+    srv.lastUsedAt = now
+  } else {
+    srv = { id: newServerId(), name: c.host, host: c.host, tls: c.tls, addedAt: now, lastUsedAt: now }
+    list.push(srv)
+  }
+  await writeTokenFor(srv.id, c.token)
+  await writeServerList(list)
+  try { await AsyncStorage.setItem(ACTIVE_SERVER_KEY, srv.id) } catch {}
+  activeServerId.set(srv.id)
+  return srv
+}
+
+/** Most recently used saved computer (new list first). */
+export function mostRecentServer(list?: SavedServer[]): SavedServer | null {
+  const sorted = (list ?? servers.get()).slice().sort((a, b) => b.lastUsedAt - a.lastUsedAt)
+  return sorted[0] ?? null
+}
+
+/** Connect to a remembered computer. Switches the active connection. */
+export async function switchToServer(id: string): Promise<void> {
+  const list = await readServerList()
+  const srv = list.find((s) => s.id === id)
+  if (!srv) throw new Error('This computer is no longer saved.')
+  const token = await readTokenFor(srv.id)
+  if (!token) throw new Error('No saved token for this computer — pair again.')
+  await dial({ host: srv.host, token, tls: srv.tls })
+}
+
+/** Remove one remembered computer. Forgets the active connection if it was ours. */
+export async function removeServer(id: string): Promise<SavedServer[]> {
+  const list = (await readServerList()).filter((s) => s.id !== id)
+  await writeServerList(list)
+  await deleteTokenFor(id)
+  if (activeServerId.get() === id) {
+    activeServerId.set(null)
+    try { await AsyncStorage.removeItem(ACTIVE_SERVER_KEY) } catch {}
+    await clearConfig()
+  }
+  return list
+}
+
+/**
+ * Forget the computer we are currently connected to (others survive).
+ * Returns the remaining list so the caller can auto-switch to another.
+ */
+export async function forgetActiveServer(): Promise<SavedServer[]> {
+  const cfg = connConfig.get()
+  const list = await readServerList()
+  const id = activeServerId.get()
+    ?? (cfg ? list.find((s) => s.host === cfg.host && s.tls === cfg.tls)?.id : undefined)
+  if (id) return removeServer(id)
+  await clearConfig()
+  return refreshServers()
 }
 
 export async function loadSavedConfig(): Promise<ConnConfig | null> {

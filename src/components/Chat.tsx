@@ -40,7 +40,12 @@ const mdStyles = {
   td: { color: C.textDim, borderColor: C.border },
 } as never
 
-export function MessageBubble({ m, onRetry }: { m: ChatMessage; onRetry?: (id: string) => void }) {
+/**
+ * Memoized: the chat screen re-renders on every stream flush (~8 Hz while a
+ * fast model streams). Memo keeps untouched bubbles from re-rendering, so
+ * only the growing bubble (new object identity) does work.
+ */
+export const MessageBubble = React.memo(function MessageBubble({ m, onRetry }: { m: ChatMessage; onRetry?: (id: string) => void }) {
   const isUser = m.role === 'user'
   const [copied, setCopied] = useState(false)
   const [speakState, setSpeakState] = useState<'idle' | 'loading' | 'playing'>('idle')
@@ -132,9 +137,18 @@ export function MessageBubble({ m, onRetry }: { m: ChatMessage; onRetry?: (id: s
       ) : null}
     </View>
   )
-}
+})
 
-export function ThinkingPanel({ text }: { text: string }) {
+export const ThinkingPanel = React.memo(function ThinkingPanel({
+  text, meta, effort, onEffortPress,
+}: {
+  text: string
+  meta?: string
+  /** Live reasoning effort — the lever on thinking length. */
+  effort?: string
+  /** Opens the /reasoning chooser; config.set applies it mid-session. */
+  onEffortPress?: () => void
+}) {
   const [open, setOpen] = useState(false)
   if (!text.trim()) return null
   const short = open ? text.slice(-4000) : text.length > 400 ? text.slice(-400) : text
@@ -143,7 +157,17 @@ export function ThinkingPanel({ text }: { text: string }) {
       <View style={s.think}>
         <View style={s.thinkHead}>
           <Ionicons name={open ? 'chevron-down' : 'chevron-forward'} size={12} color={C.textFaint} />
-          <Text style={s.thinkLabel}>Thought for a moment</Text>
+          <Text style={s.thinkLabel}>Thinking{meta ? ` · ${meta}` : ''}</Text>
+          {effort && onEffortPress ? (
+            <Pressable
+              hitSlop={6}
+              style={s.effortChip}
+              onPress={onEffortPress}
+              accessibilityLabel={`Reasoning effort ${effort}. Tap to change`}
+            >
+              <Text style={s.effortChipText}>effort: {effort}</Text>
+            </Pressable>
+          ) : null}
         </View>
         <Text style={s.thinkText} numberOfLines={open ? undefined : 4}>
           {short}
@@ -151,9 +175,9 @@ export function ThinkingPanel({ text }: { text: string }) {
       </View>
     </Pressable>
   )
-}
+})
 
-export function ToolRow({ t }: { t: ToolItem }) {
+export const ToolRow = React.memo(function ToolRow({ t }: { t: ToolItem }) {
   const color = t.status === 'running' ? C.accent : t.status === 'failed' ? C.red : C.greenSoft
   return (
     <View style={s.toolRow} accessibilityLabel={`${t.name} ${t.status}`}>
@@ -171,7 +195,7 @@ export function ToolRow({ t }: { t: ToolItem }) {
       {t.durationS != null ? <Text style={s.toolDur}>{(t.durationS).toFixed(1)}s</Text> : null}
     </View>
   )
-}
+})
 
 const s = StyleSheet.create({
   botWrap: { paddingHorizontal: 16, paddingVertical: 10 },
@@ -190,6 +214,8 @@ const s = StyleSheet.create({
   thinkHead: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 4 },
   thinkLabel: { color: C.textFaint, fontSize: 11.5, fontWeight: '600' },
   thinkText: { color: C.textDim, fontSize: 12.5, lineHeight: 18 },
+  effortChip: { marginLeft: 'auto', backgroundColor: C.bgHover, borderRadius: 10, paddingHorizontal: 7, paddingVertical: 2 },
+  effortChipText: { color: C.textFaint, fontSize: 10, fontWeight: '700' },
   toolRow: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 16, paddingVertical: 4 },
   toolName: { color: C.textDim, fontSize: 12.5, fontWeight: '600' },
   toolPreview: { color: C.textFaint, fontSize: 12, flexShrink: 1 },

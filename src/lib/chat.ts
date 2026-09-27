@@ -70,6 +70,12 @@ export interface SessionState {
   messages: ChatMessage[]
   tools: ToolItem[]
   thinking: string
+  /** "8s · ~52 tok/s" — recomputed on each stream flush while thinking runs. */
+  thinkMeta: string
+  /** When the current thinking phase started, for the tok/s estimate. */
+  thinkingStartedAt: number
+  /** Raw chars received this phase (~4 chars ≈ 1 token). */
+  thinkingChars: number
   todos: TodoItem[]
   usage: string
   busy: boolean
@@ -90,6 +96,9 @@ const EMPTY: SessionState = {
   messages: [],
   tools: [],
   thinking: '',
+  thinkMeta: '',
+  thinkingStartedAt: 0,
+  thinkingChars: 0,
   todos: [],
   usage: '',
   busy: false,
@@ -131,6 +140,7 @@ const view = computed([sessionsById, activeSession], (map, id): SessionState =>
 export const messages = computed(view, (s) => s.messages)
 export const tools = computed(view, (s) => s.tools)
 export const thinking = computed(view, (s) => s.thinking)
+export const thinkMeta = computed(view, (s) => s.thinkMeta)
 export const todos = computed(view, (s) => s.todos)
 export const usage = computed(view, (s) => s.usage)
 export const agentBusy = computed(view, (s) => s.busy)
@@ -224,6 +234,88 @@ function patchSession(id: string, patch: Partial<SessionState>) {
 
 function makeSession(id: string, storedId: string, title = '', createdAtMs = Date.now()): SessionState {
   return { ...EMPTY, id, storedId, title: title || 'New chat', createdAtMs }
+}
+
+// ── Stream batching ────────────────────────────────────────────────────────
+//
+// `thinking.delta` / `reasoning.delta` / `message.delta` can arrive 30+ times
+// per second from a fast model. Applying each delta as its own store patch
+// re-renders the whole chat screen that many times per second, which is how
+// streaming ended up feeling slower than the model actually was. Deltas are
+// now buffered per session and flushed to the store at ~8 Hz — one patch,
+// one re-render — and flushed synchronously on every terminal event.
+
+const FLUSH_MS = 120
+
+interface StreamBuf {
+  thinking: string
+  text: string
+  dirty: boolean
+}
+const streamBufs = new Map<string, StreamBuf>()
+let flushTimer: ReturnType<typeof setTimeout> | null = null
+
+function queueStream(sessionId: string, kind: 'thinking' | 'text', delta: string) {
+  let buf = streamBufs.get(sessionId)
+  if (!buf) {
+    buf = { thinking: '', text: '', dirty: false }
+    streamBufs.set(sessionId, buf)
+  }
+  if (kind === 'thinking') buf.thinking += delta
+  else buf.text += delta
+  buf.dirty = true
+  if (!flushTimer) {
+    flushTimer = setTimeout(flushStreams, FLUSH_MS)
+  }
+}
+
+/** Apply buffered deltas now. Called by the timer and before every terminal patch. */
+function flushStreams() {
+  flushTimer = null
+  for (const [sid, buf] of streamBufs) {
+    if (!buf.dirty) continue
+    buf.dirty = false
+    const thinking = buf.thinking
+    const text = buf.text
+    buf.thinking = ''
+    buf.text = ''
+    const s = sessionsById.get()[sid]
+    if (!s) continue
+
+    let messages = s.messages
+    if (text) {
+      messages = [...messages]
+      let patched = false
+      for (let i = messages.length - 1; i >= 0; i--) {
+        if (messages[i].role === 'assistant' && messages[i].streaming) {
+          messages[i] = { ...messages[i], text: (messages[i].text + text).slice(0, 32000), streaming: true }
+          patched = true
+          break
+        }
+      }
+      if (!patched) {
+        messages.push({ id: nid(), role: 'assistant', text: text.slice(0, 32000), streaming: true, ts: Date.now() })
+      }
+    }
+    const thinkingChars = thinking ? s.thinkingChars + thinking.length : s.thinkingChars
+    const thinkMeta = thinking
+      ? formatThinkMeta(s.thinkingStartedAt, thinkingChars)
+      : s.thinkMeta
+    patchSession(sid, {
+      messages,
+      thinking: thinking ? (s.thinking + thinking).slice(-4000) : s.thinking,
+      thinkingChars,
+      thinkMeta,
+    })
+  }
+}
+
+/** "~52 tok/s" style progress for the thinking panel. ~4 chars ≈ 1 token. */
+function formatThinkMeta(startedAt: number, chars: number): string {
+  if (!startedAt || !chars) return ''
+  const secs = Math.max(1, Math.round((Date.now() - startedAt) / 1000))
+  const tps = Math.round(chars / 4 / secs)
+  return chars > 240 && tps > 0 ? `${secs}s · ~${tps} tok/s` : `${secs}s`
 }
 
 // ── Transcript persistence (per session) ───────────────────────────────────
@@ -353,7 +445,7 @@ const CREATE_COLS = 120
  * only ever send keys listed in SessionCreateParams.
  */
 export async function createSession(title?: string): Promise<ResumeResult> {
-  const res = await rpc<{ session_id?: string; stored_session_id?: string; messages?: Array<Record<string, unknown>>; info?: { model?: string; provider?: string } }>(
+  const res = await rpc<{ session_id?: string; stored_session_id?: string; messages?: Array<Record<string, unknown>>; info?: { model?: string; provider?: string; reasoning_effort?: string } }>(
     'session.create',
     { title: title || 'Hermes Pocket', cols: CREATE_COLS, source: 'mobile' },
   )
@@ -376,7 +468,7 @@ export async function createSession(title?: string): Promise<ResumeResult> {
  * and what we persist), returns the LIVE id used for RPCs and events.
  */
 export async function resumeSession(storedId: string): Promise<ResumeResult> {
-  const res = await rpc<{ session_id?: string; stored_session_id?: string; messages?: Array<Record<string, unknown>>; info?: { model?: string; provider?: string } }>(
+  const res = await rpc<{ session_id?: string; stored_session_id?: string; messages?: Array<Record<string, unknown>>; info?: { model?: string; provider?: string; reasoning_effort?: string } }>(
     'session.resume',
     { session_id: storedId, cols: CREATE_COLS },
   )
@@ -512,6 +604,7 @@ let sending = false
 export async function sendPrompt(rawText: string) {
   const text = rawText.trim().slice(0, 8000)
   if (!text) return
+  flushStreams()
   if (sending) {
     enqueueOffline(text)
     return
@@ -578,6 +671,7 @@ export async function stopRun() {
   } catch (err) {
     log('warn', 'chat', `interrupt failed: ${String(err)}`)
   }
+  flushStreams()
   patchSession(sid, { busy: false })
 }
 
@@ -809,6 +903,7 @@ export function hookChatEvents() {
         noteSessionInfo({
           model: typeof p.model === 'string' ? p.model : undefined,
           provider: typeof p.provider === 'string' ? p.provider : undefined,
+          reasoning_effort: typeof p.reasoning_effort === 'string' ? p.reasoning_effort : undefined,
         })
         break
       }
@@ -823,6 +918,7 @@ export function hookChatEvents() {
         // The backend evicted the live session (idle timeout / LRU evict). The
         // transcript is still valid, but the live handle is dead — mark it so
         // the next send transparently resumes instead of failing.
+        flushStreams()
         log('warn', 'chat', `session reclaimed: ${String(p.reason)}`)
         patchSession(eSid, { busy: false, detached: true })
         if (isShowing(eSid)) {
@@ -866,32 +962,23 @@ export function hookChatEvents() {
       }
 
       case 'message.start': {
+        flushStreams()
         const list = s.messages
         const last = list[list.length - 1]
         if (last?.role === 'assistant' && last.streaming) break
         patchSession(eSid, {
           messages: [...list, { id: nid(), role: 'assistant', text: '', streaming: true, ts: Date.now() }],
           thinking: '',
+          thinkMeta: '',
+          thinkingStartedAt: Date.now(),
+          thinkingChars: 0,
         })
         break
       }
 
       case 'message.delta': {
         const text = String(p.text ?? p.delta ?? '')
-        if (!text) break
-        const list = [...s.messages]
-        let patched = false
-        for (let i = list.length - 1; i >= 0; i--) {
-          if (list[i].role === 'assistant' && list[i].streaming) {
-            list[i] = { ...list[i], text: (list[i].text + text).slice(0, 32000), streaming: true }
-            patched = true
-            break
-          }
-        }
-        if (!patched) {
-          list.push({ id: nid(), role: 'assistant', text: text.slice(0, 32000), streaming: true, ts: Date.now() })
-        }
-        patchSession(eSid, { messages: list })
+        if (text) queueStream(eSid, 'text', text)
         break
       }
 
@@ -899,6 +986,7 @@ export function hookChatEvents() {
         break
 
       case 'message.complete': {
+        flushStreams()
         const text = typeof p.text === 'string' ? p.text : ''
         const list = [...s.messages]
         for (let i = list.length - 1; i >= 0; i--) {
@@ -933,7 +1021,7 @@ export function hookChatEvents() {
       case 'thinking.delta':
       case 'reasoning.delta': {
         const text = String(p.text ?? p.delta ?? '')
-        if (text) patchSession(eSid, { thinking: (s.thinking + text).slice(-4000) })
+        if (text) queueStream(eSid, 'thinking', text)
         break
       }
 
@@ -993,6 +1081,7 @@ export function hookChatEvents() {
       }
 
       case 'background.complete': {
+        flushStreams()
         patchSession(eSid, { busy: false })
         sending = false
         log('info', 'chat', `background complete: ${JSON.stringify(p).slice(0, 200)}`)
@@ -1004,6 +1093,7 @@ export function hookChatEvents() {
 
       case 'status.update': {
         if (p.busy === false) {
+          flushStreams()
           patchSession(eSid, { busy: false })
           sending = false
         }
@@ -1011,6 +1101,7 @@ export function hookChatEvents() {
       }
 
       case 'error': {
+        flushStreams()
         const msg = String(p.message ?? p.error ?? 'Gateway error')
         const list = [...s.messages]
         const last = list[list.length - 1]

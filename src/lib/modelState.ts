@@ -77,6 +77,7 @@ export interface ModelOptions {
 export interface SessionInfoLite {
   model?: string
   provider?: string
+  reasoning_effort?: string
 }
 
 /** Persistence scope for a switch — maps 1:1 to the gateway's /model flags. */
@@ -88,6 +89,9 @@ export type ModelScope = 'session' | 'global' | 'once'
 export const liveModel = atom<string>('')
 /** The active session's live provider slug (e.g. "zai"). */
 export const liveProvider = atom<string>('')
+/** The active session's live reasoning effort (e.g. "high") — the main lever
+ *  on how long the thinking phase lasts, applied live by config.set. */
+export const liveReasoning = atom<string>('')
 /** Cached `model.options` payload — refetched with `force` when stale. */
 export const modelOptions = atom<ModelOptions | null>(null)
 export const modelOptionsLoading = atom<boolean>(false)
@@ -98,6 +102,9 @@ export function noteSessionInfo(info?: SessionInfoLite | null) {
   if (typeof info.model === 'string' && info.model) liveModel.set(info.model)
   if (typeof info.provider === 'string' && info.provider && info.provider !== 'unknown') {
     liveProvider.set(info.provider)
+  }
+  if (typeof info.reasoning_effort === 'string' && info.reasoning_effort) {
+    liveReasoning.set(info.reasoning_effort)
   }
 }
 
@@ -117,6 +124,7 @@ export function hookModelState() {
       noteSessionInfo({
         model: typeof p.model === 'string' ? p.model : undefined,
         provider: typeof p.provider === 'string' ? p.provider : undefined,
+        reasoning_effort: typeof p.reasoning_effort === 'string' ? p.reasoning_effort : undefined,
       })
     })
   })().catch((err) => log('warn', 'model', `hookModelState failed: ${String(err)}`))

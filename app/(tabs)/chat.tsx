@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import {
   View,
   Text,
@@ -24,6 +24,7 @@ import {
   messages,
   tools,
   thinking,
+  thinkMeta,
   agentBusy,
   pendingRequest,
   usage,
@@ -43,10 +44,11 @@ import {
   flushOutbox,
   pushLocalMessage,
   type ToolItem,
+  type ChatMessage,
 } from '../../src/lib/chat'
 import { isConnected as isConnectedAtom, connectionState, gatewayError, retryNow } from '../../src/lib/gateway'
 import { completeSlash, loadCatalog, runCommand, parseSlashCommand, canonicalName, interactiveTarget, describeCommand, subsFor, argumentModeFor, type CompletionItem, type SlashOutcome } from '../../src/lib/slash'
-import { liveModel } from '../../src/lib/modelState'
+import { liveModel, liveReasoning } from '../../src/lib/modelState'
 import { ModelPickerSheet } from '../../src/components/ModelPickerSheet'
 import { CommandOptionsSheet } from '../../src/components/CommandOptionsSheet'
 import { MessageBubble, ThinkingPanel, ToolRow } from '../../src/components/Chat'
@@ -74,10 +76,12 @@ export default function Chat() {
   const qb = useStore(outbox)
   const title = useStore(activeTitle)
   const sid = useStore(activeSession)
+  const tmeta = useStore(thinkMeta)
   const online = useStore(isConnectedAtom)
   const conn = useStore(connectionState)
   const gerr = useStore(gatewayError)
   const curModel = useStore(liveModel)
+  const curEffort = useStore(liveReasoning)
   const [input, setInput] = useState('')
   const [steerMode, setSteerMode] = useState(false)
   const [answerText, setAnswerText] = useState('')
@@ -125,9 +129,11 @@ export default function Chat() {
 
   useEffect(() => {
     if (!stick) return
-    const t = setTimeout(() => listRef.current?.scrollToEnd?.({ animated: true }), 80)
+    // Non-animated while streaming: an animated scroll re-fired every flush
+    // fights itself and makes the stream look slower than it is.
+    const t = setTimeout(() => listRef.current?.scrollToEnd?.({ animated: !busy }), 80)
     return () => clearTimeout(t)
-  }, [msgs.length, msgs[msgs.length - 1]?.text, tls.length, think.length, stick])
+  }, [msgs.length, msgs[msgs.length - 1]?.text, tls.length, think.length, stick, busy])
 
   // ── Slash palette ──────────────────────────────────────────────────────
   const slashQuery = input.startsWith('/') ? input.split('\n')[0] : null
@@ -315,6 +321,14 @@ export default function Chat() {
   const cmdCount = slashItems?.filter((i) => i.kind !== 'skill').length ?? 0
   const skillCount = slashItems?.filter((i) => i.kind === 'skill').length ?? 0
 
+  // Stable row renderer: without this, every stream flush re-created the
+  // closure and re-rendered every visible bubble, not just the growing one.
+  const onRetryMsg = useCallback((id: string) => { void retryMessage(id).catch(() => {}) }, [])
+  const renderMsg = useCallback(
+    ({ item }: { item: ChatMessage }) => <MessageBubble m={item} onRetry={onRetryMsg} />,
+    [onRetryMsg],
+  )
+
   return (
     <SafeAreaView style={s.safe} edges={['bottom']}>
       <ScreenShell
@@ -352,9 +366,7 @@ export default function Chat() {
             ref={listRef}
             data={msgs}
             keyExtractor={(m) => m.id}
-            renderItem={({ item }) => (
-              <MessageBubble m={item} onRetry={(id) => { void retryMessage(id).catch(() => {}) }} />
-            )}
+            renderItem={renderMsg}
             contentContainerStyle={{ paddingBottom: 16, flexGrow: msgs.length ? 0 : 1 }}
             keyboardShouldPersistTaps="handled"
             keyboardDismissMode="interactive"
@@ -390,7 +402,14 @@ export default function Chat() {
             <View style={s.runFooter}>
               {tls.slice(-3).map((t: ToolItem) => <ToolRow key={t.id} t={t} />)}
               {tls.length > 3 ? <Text style={s.moreTools}>+{tls.length - 3} more</Text> : null}
-              {think.length > 0 && busy ? <ThinkingPanel text={think} /> : null}
+              {think.length > 0 && busy ? (
+                <ThinkingPanel
+                  text={think}
+                  meta={tmeta}
+                  effort={curEffort || undefined}
+                  onEffortPress={curEffort ? () => setOptionSheet({ command: 'reasoning', allowText: false }) : undefined}
+                />
+              ) : null}
               {td.length > 0 ? (
                 <View style={s.todos}>
                   {td.slice(0, 4).map((t, i) => (

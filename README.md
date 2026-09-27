@@ -99,6 +99,19 @@ requests carry their own `session_id` and are queued per session — a question
 for a background conversation shows up in the tab badge instead of blocking the
 chat you're reading.
 
+## Streaming performance
+
+A fast model bursts 80+ `reasoning.delta` / `message.delta` events per second
+(measured: 147 thinking events in one short turn). Applying each as its own
+store patch re-renders the whole chat screen that many times per second, which
+read as "the model is slow". Deltas are therefore buffered per session and
+flushed at ~8 Hz (`chat.ts` stream batching), rows are `React.memo`-ized so a
+flush only re-renders the growing bubble, and the scroll-to-bottom goes
+non-animated while a stream is live. The thinking panel shows elapsed seconds
+and a ~tok/s estimate, plus the session's reasoning-effort chip — `config.set
+reasoning` applies live, so lowering effort mid-chat shortens the next
+thinking phase.
+
 ## Protocol
 
 `src/protocol/` is a port of the upstream shared client
