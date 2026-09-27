@@ -1,17 +1,28 @@
 {
   "expo": {
-    "name": "hermes-mobile",
+    "name": "Hermes Pocket",
     "slug": "hermes-mobile",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "dark",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.hermes.pocket",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Scan the pairing QR shown by your Hermes server.",
+        "NSMicrophoneUsageDescription": "Record voice messages for your agent.",
+        "NSFaceIDUsageDescription": "Unlock your saved server token."
+      },
+      "config": {
+        "usesNonExemptEncryption": false
+      }
     },
     "android": {
+      "package": "com.hermes.pocket",
+      "permissions": ["CAMERA", "RECORD_AUDIO"],
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
+        "backgroundColor": "#0E1B14",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
@@ -19,7 +30,35 @@
       "predictiveBackGestureEnabled": false
     },
     "web": {
-      "favicon": "./assets/favicon.png"
-    }
+      "bundler": "metro"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "imageWidth": 200
+        }
+      ],
+      "expo-secure-store",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Scan the pairing QR shown by your Hermes server.",
+          "microphonePermission": "Record voice messages for your agent.",
+          "recordAudioAndroid": true,
+          "barcodeScannerEnabled": true
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "color": "#0E1B14",
+          "defaultChannel": "hermes-alerts"
+        }
+      ],
+      "expo-audio"
+    ],
+    "scheme": "hermes"
   }
 }
