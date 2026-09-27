@@ -328,6 +328,14 @@ export default function Chat() {
     ({ item }: { item: ChatMessage }) => <MessageBubble m={item} onRetry={onRetryMsg} />,
     [onRetryMsg],
   )
+  // FlatList contract: with a stable renderItem, memoized cells only
+  // re-evaluate when `extraData` changes. Without this, streaming updates
+  // never reach the rows on Fabric — text piles up invisibly until the turn
+  // ends ("waits, then dumps the whole reply"). Derived from message state so
+  // it changes exactly when a row's content can have.
+  const extraData = msgs
+    .map((m) => `${m.id}:${m.text.length}:${m.streaming ? 's' : ''}:${m.status ?? ''}`)
+    .join('|')
 
   return (
     <SafeAreaView style={s.safe} edges={['bottom']}>
@@ -367,6 +375,7 @@ export default function Chat() {
             data={msgs}
             keyExtractor={(m) => m.id}
             renderItem={renderMsg}
+            extraData={extraData}
             contentContainerStyle={{ paddingBottom: 16, flexGrow: msgs.length ? 0 : 1 }}
             keyboardShouldPersistTaps="handled"
             keyboardDismissMode="interactive"

@@ -14,8 +14,27 @@ On the PC that runs the gateway:
 ```
 
 It prints the host/token plus a QR. On the phone: open Hermes Pocket →
-**Scan pairing QR** (or paste the `hermes://connect?…` link). Token lands in
-SecureStore, never in git.
+**Scan QR code** (or, under *More options*, paste the `hermes://connect?…`
+link or type host/token by hand). Token lands in SecureStore, never in git.
+
+**Every computer you pair is remembered.** The app reconnects to the last one
+on launch; switch between them from Settings → *Computers* (or the
+*Computers…* button on the connection-failed screen), and pair additional
+machines with Settings → *Add computer*. *Forget* only removes the machine you
+pick — the others stay saved.
+
+### Away from home WiFi?
+
+The app reaches the gateway wherever the phone can reach the host:
+
+- **Same network** — pair with the PC's LAN IP (plain `ws://`). Simplest, but
+  only works at home.
+- **Anywhere** — install [Tailscale](https://tailscale.com) on both the PC and
+  the phone, then pair with the tailnet hostname + TLS (second command above).
+  Works over mobile data and foreign WiFi, no port forwarding, token is
+  encrypted in transit.
+- Tip: pair the *same machine twice* — once via LAN IP, once via Tailscale —
+  and both entries sit in *Computers* for one-tap switching.
 
 ## Voice (STT + TTS via your gateway)
 
@@ -106,8 +125,10 @@ A fast model bursts 80+ `reasoning.delta` / `message.delta` events per second
 store patch re-renders the whole chat screen that many times per second, which
 read as "the model is slow". Deltas are therefore buffered per session and
 flushed at ~8 Hz (`chat.ts` stream batching), rows are `React.memo`-ized so a
-flush only re-renders the growing bubble, and the scroll-to-bottom goes
-non-animated while a stream is live. The thinking panel shows elapsed seconds
+flush only re-renders the growing bubble, the FlatList carries an
+`extraData` message fingerprint (without it, Fabric's memoized cells never
+re-evaluate and streaming freezes until the turn ends), and the
+scroll-to-bottom goes non-animated while a stream is live. The thinking panel shows elapsed seconds
 and a ~tok/s estimate, plus the session's reasoning-effort chip — `config.set
 reasoning` applies live, so lowering effort mid-chat shortens the next
 thinking phase.
