@@ -16,7 +16,8 @@ import {
   liveModel, liveProvider, modelOptions, modelOptionsLoading,
   type ProviderOption, type ModelScope,
 } from '../lib/modelState'
-import { ensureSession, pushLocalMessage } from '../lib/chat'
+import { ensureSession, activeLiveId, pushLocalMessage } from '../lib/chat'
+import { slashLabel } from '../lib/slash'
 import { log } from '../lib/log'
 import { C } from '../lib/theme'
 
@@ -36,10 +37,17 @@ export function ModelPickerSheet({ open, onClose }: { open: boolean; onClose: ()
   const [keyFor, setKeyFor] = useState<ProviderOption | null>(null)
   const [ keyValue, setKeyValue] = useState('')
   const [savingKey, setSavingKey] = useState(false)
+  /** Set when the open-path refresh fails — surfaced in the sheet, not just the log. */
+  const [loadError, setLoadError] = useState('')
   const seq = useRef(0)
 
   // Fresh inventory each time the sheet opens (cheap; also re-layers the
-  // session's live provider after resumes).
+  // session's live provider after resumes). Cached rows render instantly —
+  // the spinner only gates a true first open — and the session id comes
+  // from activeLiveId(): a plain store read in the steady state (no boot
+  // RPC on the open path), while optimistic new-chat/switch windows resolve
+  // to a REAL live id so a pending/temp key is never sent as session_id.
+  // The apply/save paths ensure a session where one is actually required.
   useEffect(() => {
     if (!open) return
     setStep('provider')
@@ -48,11 +56,12 @@ export function ModelPickerSheet({ open, onClose }: { open: boolean; onClose: ()
     setQuery('')
     setKeyFor(null)
     setKeyValue('')
+    setLoadError('')
     void (async () => {
       try {
-        const sid = await ensureSession()
-        await fetchModelOptions(sid, { force: true })
+        await fetchModelOptions(await activeLiveId(), { force: true })
       } catch (err) {
+        setLoadError(err instanceof Error ? err.message : 'Could not load models')
         log('warn', 'model', `model.options failed: ${String(err)}`)
       }
     })()
@@ -152,13 +161,13 @@ export function ModelPickerSheet({ open, onClose }: { open: boolean; onClose: ()
         const lines = [`Model switched to ${res.model} (${provider.name}) — ${where}.`]
         if (res.deferred) lines.push('The agent is mid-turn, so it lands on the next turn.')
         if (res.warning) lines.push(res.warning)
-        pushLocalMessage(lines.join('\n'))
+        pushLocalMessage(lines.join('\n'), 'assistant', { name: slashLabel('model'), variant: 'success' })
         onClose()
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
       log('warn', 'model', `switch failed: ${msg}`)
-      pushLocalMessage(`Model switch failed — ${msg.replace(/^config\.set:\s*/, '')}`)
+      pushLocalMessage(`Model switch failed — ${msg.replace(/^config\.set:\s*/, '')}`, 'assistant', { name: slashLabel('model'), variant: 'error' })
     } finally {
       setApplying(false)
     }
@@ -175,7 +184,7 @@ export function ModelPickerSheet({ open, onClose }: { open: boolean; onClose: ()
           <View style={s.head}>
             {step !== 'provider' ? (
               <Pressable
-                style={s.back}
+                style={({ pressed }) => [s.back, pressed && s.iconPressed]}
                 hitSlop={8}
                 onPress={() => (step === 'scope' ? setStep('model') : setStep('provider'))}
                 accessibilityLabel="Back"
@@ -189,10 +198,21 @@ export function ModelPickerSheet({ open, onClose }: { open: boolean; onClose: ()
                 {curModel ? `Now: ${curModel}${curProvider ? ` · ${curProvider}` : ''}` : 'Tap a provider, then a model'}
               </Text>
             </View>
-            <Pressable style={s.close} hitSlop={8} onPress={onClose} accessibilityLabel="Close">
+            <Pressable
+              style={({ pressed }) => [s.close, pressed && s.iconPressed]}
+              hitSlop={8}
+              onPress={onClose}
+              accessibilityLabel="Close"
+            >
               <Ionicons name="close" size={20} color={C.textDim} />
             </Pressable>
           </View>
+
+          {loadError ? (
+            <Text style={s.loadWarning}>
+              Couldn't refresh the model inventory ({loadError}). Showing the last known list.
+            </Text>
+          ) : null}
 
           {/* Search (provider + model steps) */}
           {step !== 'scope' && !keyFor ? (
@@ -207,7 +227,12 @@ export function ModelPickerSheet({ open, onClose }: { open: boolean; onClose: ()
                 accessibilityLabel={step === 'provider' ? 'Filter providers' : 'Filter models'}
               />
               {query ? (
-                <Pressable hitSlop={6} onPress={() => setQuery('')} accessibilityLabel="Clear filter">
+                <Pressable
+                  hitSlop={6}
+                  style={({ pressed }) => [s.clear, pressed && s.iconPressed]}
+                  onPress={() => setQuery('')}
+                  accessibilityLabel="Clear filter"
+                >
                   <Ionicons name="close-circle" size={15} color={C.textFaint} />
                 </Pressable>
               ) : null}
@@ -260,7 +285,11 @@ export function ModelPickerSheet({ open, onClose }: { open: boolean; onClose: ()
                 accessibilityLabel="API key"
               />
               <View style={s.keyRow}>
-                <Pressable style={[s.keyBtn, s.keyCancel]} onPress={() => setKeyFor(null)} accessibilityLabel="Cancel key">
+                <Pressable
+                  style={({ pressed }) => [s.keyBtn, s.keyCancel, pressed && s.iconPressed]}
+                  onPress={() => setKeyFor(null)}
+                  accessibilityLabel="Cancel key"
+                >
                   <Text style={s.keyCancelText}>Cancel</Text>
                 </Pressable>
                 <Pressable
@@ -407,6 +436,8 @@ const s = StyleSheet.create({
   headSub: { color: C.textFaint, fontSize: 12, marginTop: 1 },
   back: { width: 30, height: 30, borderRadius: 15, backgroundColor: C.bgCard, alignItems: 'center', justifyContent: 'center' },
   close: { width: 30, height: 30, borderRadius: 15, backgroundColor: C.bgCard, alignItems: 'center', justifyContent: 'center' },
+  clear: { width: 26, height: 26, alignItems: 'center', justifyContent: 'center' },
+  iconPressed: { opacity: 0.55 },
   searchWrap: {
     flexDirection: 'row', alignItems: 'center', gap: 8,
     marginHorizontal: 14, marginBottom: 6,
@@ -429,6 +460,7 @@ const s = StyleSheet.create({
   chip: { color: C.textDim, fontSize: 10.5, backgroundColor: C.bgCard, borderRadius: 8, overflow: 'hidden', paddingHorizontal: 6, paddingVertical: 2 },
   sectionLabel: { color: C.textFaint, fontSize: 10.5, fontWeight: '800', letterSpacing: 1.5, paddingHorizontal: 12, paddingTop: 14, paddingBottom: 4 },
   providerWarning: { color: C.amber, fontSize: 11.5, lineHeight: 16, paddingHorizontal: 12, paddingBottom: 6 },
+  loadWarning: { color: C.amber, fontSize: 11.5, lineHeight: 16, paddingHorizontal: 14, paddingBottom: 6 },
   empty: { color: C.textFaint, fontSize: 13, textAlign: 'center', padding: 24 },
   keyWrap: { padding: 16, gap: 8 },
   keyTitle: { color: C.text, fontSize: 15, fontWeight: '700' },

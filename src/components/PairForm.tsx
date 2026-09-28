@@ -87,13 +87,23 @@ export function PairForm({ onPaired }: { onPaired: () => void }) {
 
   return (
     <View>
-      <Pressable style={s.scanBtn} onPress={() => void openScanner()} accessibilityRole="button" accessibilityLabel="Scan pairing QR">
+      <Pressable
+        style={({ pressed }) => [s.scanBtn, pressed && s.pressed]}
+        onPress={() => void openScanner()}
+        accessibilityRole="button"
+        accessibilityLabel="Scan pairing QR"
+      >
         <Ionicons name="qr-code-outline" size={22} color={C.onAccent} />
         <Text style={s.scanText}>Scan QR code</Text>
       </Pressable>
       <Text style={s.scanHint}>On your computer run scripts/hermes-pair.sh —{'\n'}it prints the QR to scan.</Text>
 
-      <Pressable style={s.moreToggle} onPress={() => setShowMore(!showMore)} accessibilityRole="button" accessibilityLabel="More pairing options">
+      <Pressable
+        style={({ pressed }) => [s.moreToggle, pressed && s.pressed]}
+        onPress={() => setShowMore(!showMore)}
+        accessibilityRole="button"
+        accessibilityLabel="More pairing options"
+      >
         <Text style={s.moreText}>{showMore ? 'Hide options' : 'More options'}</Text>
         <Ionicons name={showMore ? 'chevron-up' : 'chevron-down'} size={14} color={C.textFaint} />
       </Pressable>
@@ -112,7 +122,7 @@ export function PairForm({ onPaired }: { onPaired: () => void }) {
               autoCorrect={false}
               accessibilityLabel="Pairing link"
             />
-            <Pressable style={s.secondaryBtn} onPress={applyPairingCode} accessibilityLabel="Use pairing link">
+            <Pressable style={({ pressed }) => [s.secondaryBtn, pressed && s.pressed]} onPress={applyPairingCode} accessibilityLabel="Use pairing link">
               <Text style={s.secondaryText}>Use pairing link</Text>
             </Pressable>
           </View>
@@ -149,7 +159,12 @@ export function PairForm({ onPaired }: { onPaired: () => void }) {
                 <Text style={s.showText}>{showToken ? 'Hide' : 'Show'}</Text>
               </Pressable>
             </View>
-            <Pressable style={[s.btn, busy && s.btnBusy]} onPress={() => void doConnect()} disabled={busy} accessibilityLabel="Connect">
+            <Pressable
+              style={({ pressed }) => [s.btn, busy && s.btnBusy, pressed && s.pressed]}
+              onPress={() => void doConnect()}
+              disabled={busy}
+              accessibilityLabel="Connect"
+            >
               {busy ? <ActivityIndicator color={C.onAccent} /> : <Text style={s.btnText}>Connect</Text>}
             </Pressable>
           </View>
@@ -179,6 +194,7 @@ export function PairForm({ onPaired }: { onPaired: () => void }) {
 }
 
 const s = StyleSheet.create({
+  pressed: { opacity: 0.6 },
   scanBtn: {
     backgroundColor: C.accent, borderRadius: 14, paddingVertical: 16, paddingHorizontal: 18,
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, minHeight: 56,

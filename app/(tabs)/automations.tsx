@@ -191,7 +191,12 @@ export default function Automations() {
         title="Automations"
         showBrand
         right={
-          <Pressable style={s.addBtn} onPress={openAdd} hitSlop={8} accessibilityLabel="New automation">
+          <Pressable
+            style={({ pressed }) => [s.addBtn, pressed && s.btnPressed]}
+            onPress={openAdd}
+            hitSlop={8}
+            accessibilityLabel="New automation"
+          >
             <Ionicons name="add" size={20} color={C.onAccent} />
           </Pressable>
         }
@@ -211,7 +216,7 @@ export default function Automations() {
           ) : null}
 
           {error ? (
-            <Pressable onPress={() => { setLoading(true); void load() }}>
+            <Pressable style={({ pressed }) => [s.retryRow, pressed && s.btnPressed]} onPress={() => { setLoading(true); void load() }}>
               <Text style={s.error}>{error} — tap to retry</Text>
             </Pressable>
           ) : null}
@@ -223,7 +228,7 @@ export default function Automations() {
               <Ionicons name="timer-outline" size={28} color={C.textFaint} />
               <Text style={s.emptyTitle}>No automations yet</Text>
               <Text style={s.emptyBody}>Tap + to schedule your first job,{'\n'}or create one from chat with /cron add</Text>
-              <Pressable style={s.emptyBtn} onPress={openAdd} accessibilityLabel="New automation">
+              <Pressable style={({ pressed }) => [s.emptyBtn, pressed && s.btnPressed]} onPress={openAdd} accessibilityLabel="New automation">
                 <Ionicons name="add" size={16} color={C.onAccent} />
                 <Text style={s.emptyBtnText}>New automation</Text>
               </Pressable>
@@ -238,7 +243,7 @@ export default function Automations() {
             return (
               <View key={j.job_id} style={[s.card, paused && s.cardPaused]}>
                 <Pressable
-                  style={s.cardHead}
+                  style={({ pressed }) => [s.cardHead, pressed && s.btnPressed]}
                   onPress={() => setExpanded(open ? null : j.job_id)}
                   accessibilityLabel={open ? `Collapse ${j.name ?? j.job_id}` : `Expand ${j.name ?? j.job_id}`}
                 >
@@ -302,11 +307,21 @@ export default function Automations() {
         <SafeAreaView style={s.modalSafe}>
           <KeyboardAvoidingView style={s.modalRoot} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
             <View style={s.modalHead}>
-              <Pressable onPress={() => { if (!form?.saving) setForm(null) }} disabled={form?.saving} accessibilityLabel="Cancel">
+              <Pressable
+                style={({ pressed }) => [s.modalTextBtn, pressed && s.btnPressed]}
+                onPress={() => { if (!form?.saving) setForm(null) }}
+                disabled={form?.saving}
+                accessibilityLabel="Cancel"
+              >
                 <Text style={s.modalCancel}>Cancel</Text>
               </Pressable>
               <Text style={s.modalTitle}>{form?.jobId ? 'Edit automation' : 'New automation'}</Text>
-              <Pressable onPress={() => { void saveForm() }} disabled={form?.saving} accessibilityLabel="Save automation">
+              <Pressable
+                style={({ pressed }) => [s.modalTextBtn, pressed && s.btnPressed]}
+                onPress={() => { void saveForm() }}
+                disabled={form?.saving}
+                accessibilityLabel="Save automation"
+              >
                 {form?.saving ? (
                   <ActivityIndicator size="small" color={C.accent} />
                 ) : (
@@ -406,12 +421,14 @@ const s = StyleSheet.create({
   statusRow: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: 'rgba(74,222,128,0.08)', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8 },
   statusText: { color: C.greenSoft, fontSize: 12.5, fontWeight: '600' },
   error: { color: C.red, fontSize: 13, paddingVertical: 8 },
+  retryRow: { alignItems: 'center' },
   empty: { alignItems: 'center', marginTop: 48, gap: 8 },
   emptyTitle: { color: C.text, fontSize: 16, fontWeight: '700', marginTop: 4 },
   emptyBody: { color: C.textFaint, fontSize: 13, textAlign: 'center', lineHeight: 19 },
   emptyBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: C.accent, borderRadius: 20, paddingHorizontal: 16, height: 40, marginTop: 10 },
   emptyBtnText: { color: C.onAccent, fontSize: 14, fontWeight: '700' },
   addBtn: { width: 38, height: 38, borderRadius: 19, backgroundColor: C.accent, alignItems: 'center', justifyContent: 'center' },
+  btnPressed: { opacity: 0.6 },
   card: { backgroundColor: C.bgCard, borderRadius: 14, padding: 14, borderWidth: 1, borderColor: C.borderSoft },
   cardPaused: { opacity: 0.75 },
   cardHead: { flexDirection: 'row', alignItems: 'center', gap: 8 },
@@ -433,8 +450,9 @@ const s = StyleSheet.create({
   modalRoot: { flex: 1 },
   modalHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: C.borderSoft },
   modalTitle: { color: C.text, fontSize: 15.5, fontWeight: '700' },
-  modalCancel: { color: C.textDim, fontSize: 14.5, fontWeight: '600', minHeight: 44, paddingTop: 12 },
-  modalSave: { color: C.accent, fontSize: 14.5, fontWeight: '800', minHeight: 44, paddingTop: 12 },
+  modalTextBtn: { justifyContent: 'center' },
+  modalCancel: { color: C.textDim, fontSize: 14.5, fontWeight: '600', paddingTop: 12, minHeight: 44 },
+  modalSave: { color: C.accent, fontSize: 14.5, fontWeight: '800', paddingTop: 12, minHeight: 44 },
   fieldLabel: { color: C.textFaint, fontSize: 10.5, fontWeight: '800', letterSpacing: 1.5, marginBottom: 6 },
   field: { backgroundColor: C.bgCard, borderRadius: 12, borderWidth: 1, borderColor: C.borderSoft, paddingHorizontal: 14, paddingVertical: 12, color: C.text, fontSize: 15, minHeight: 48 },
   fieldMulti: { minHeight: 120, textAlignVertical: 'top' },

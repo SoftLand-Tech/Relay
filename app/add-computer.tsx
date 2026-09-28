@@ -14,7 +14,12 @@ export default function AddComputer() {
   return (
     <SafeAreaView style={s.safe} edges={['top', 'bottom']}>
       <ScrollView style={s.root} contentContainerStyle={s.content} keyboardShouldPersistTaps="handled">
-        <Pressable style={s.back} onPress={() => router.back()} accessibilityRole="button" accessibilityLabel="Back to settings">
+        <Pressable
+          style={({ pressed }) => [s.back, pressed && s.pressed]}
+          onPress={() => router.back()}
+          accessibilityRole="button"
+          accessibilityLabel="Back to settings"
+        >
           <Ionicons name="chevron-back" size={22} color={C.text} />
           <Text style={s.backText}>Settings</Text>
         </Pressable>
@@ -30,6 +35,7 @@ export default function AddComputer() {
 const s = StyleSheet.create({
   safe: { flex: 1, backgroundColor: C.bg },
   root: { flex: 1, backgroundColor: C.bg },
+  pressed: { opacity: 0.6 },
   content: { padding: 24, paddingBottom: 40 },
   back: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingVertical: 10, minHeight: 44 },
   backText: { color: C.text, fontSize: 15, fontWeight: '600' },

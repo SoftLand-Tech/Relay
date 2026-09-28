@@ -41,7 +41,7 @@ export default function Onboarding() {
             {saved.slice().sort((a, b) => b.lastUsedAt - a.lastUsedAt).map((sv) => (
               <Pressable
                 key={sv.id}
-                style={s.savedRow}
+                style={({ pressed }) => [s.savedRow, pressed && s.pressed]}
                 onPress={() => void pick(sv.id)}
                 accessibilityRole="button"
                 accessibilityLabel={`Connect to ${sv.name}`}
@@ -69,6 +69,7 @@ export default function Onboarding() {
 const s = StyleSheet.create({
   safe: { flex: 1, backgroundColor: C.bg },
   root: { flex: 1, backgroundColor: C.bg },
+  pressed: { opacity: 0.6 },
   content: { padding: 24, paddingBottom: 40 },
   kicker: { color: C.accent, fontSize: 11, fontWeight: '700', letterSpacing: 2.5, marginBottom: 10, marginTop: 20 },
   title: { color: C.text, fontSize: 46, fontWeight: '800', lineHeight: 52, marginBottom: 10 },

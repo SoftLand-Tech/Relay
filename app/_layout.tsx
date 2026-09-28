@@ -17,6 +17,7 @@ import {
 import { hookChatEvents, loadOutbox, switchToSession } from '../src/lib/chat'
 import { loadAttention, pendingOpenStoredId, requestOpenSession } from '../src/lib/attention'
 import { loadDrafts } from '../src/lib/drafts'
+import { loadSendQueue } from '../src/lib/sendQueue'
 import { parseConnectUrl } from '../src/lib/pairing'
 import { C } from '../src/lib/theme'
 
@@ -60,6 +61,7 @@ export default function RootLayout() {
     hookChatEvents()
     void loadOutbox()
     void loadDrafts()
+    void loadSendQueue()
     void loadAttention()
     void initPush()
     void refreshServers()
@@ -168,16 +170,16 @@ export default function RootLayout() {
                 {err ? `\n${err.slice(0, 300)}` : ''}
               </Text>
               <View style={s.btnRow}>
-                <Pressable style={s.btn} onPress={() => { void retryNow().catch(() => {}) }}>
+                <Pressable style={({ pressed }) => [s.btn, pressed && s.pressed]} onPress={() => { void retryNow().catch(() => {}) }}>
                   <Text style={s.btnText}>Retry</Text>
                 </Pressable>
                 {savedServers.length > 1 ? (
-                  <Pressable style={s.ghostBtn} onPress={() => setShowServers(true)}>
+                  <Pressable style={({ pressed }) => [s.ghostBtn, pressed && s.pressed]} onPress={() => setShowServers(true)}>
                     <Text style={s.ghostText}>Computers…</Text>
                   </Pressable>
                 ) : null}
               </View>
-              <Pressable style={s.ghostBtn} onPress={() => { void forgetAndFallBack() }}>
+              <Pressable style={({ pressed }) => [s.ghostBtn, pressed && s.pressed]} onPress={() => { void forgetAndFallBack() }}>
                 <Text style={s.ghostText}>Forget this computer</Text>
               </Pressable>
             </>
@@ -185,7 +187,7 @@ export default function RootLayout() {
             <>
               <ActivityIndicator color={C.accent} size="large" />
               <Text style={s.connecting}>Connecting to your agent…{attempt > 0 ? ` (try ${attempt + 1})` : ''}</Text>
-              <Pressable style={s.ghostBtn} onPress={() => { disconnect() }}>
+              <Pressable style={({ pressed }) => [s.ghostBtn, pressed && s.pressed]} onPress={() => { disconnect() }}>
                 <Text style={s.ghostText}>Cancel</Text>
               </Pressable>
             </>
@@ -206,7 +208,7 @@ export default function RootLayout() {
               savedServers.slice().sort((a, b) => b.lastUsedAt - a.lastUsedAt).map((sv) => (
                 <Pressable
                   key={sv.id}
-                  style={[s.pickerRow, sv.id === activeId && s.pickerRowActive]}
+                  style={({ pressed }) => [s.pickerRow, sv.id === activeId && s.pickerRowActive, pressed && s.pressed]}
                   onPress={() => { setShowServers(false); void switchToServer(sv.id).catch(() => {}) }}
                   accessibilityRole="button"
                   accessibilityLabel={`Switch to ${sv.name}`}
@@ -219,7 +221,7 @@ export default function RootLayout() {
                 </Pressable>
               ))
             )}
-            <Pressable style={s.ghostBtn} onPress={() => setShowServers(false)}>
+            <Pressable style={({ pressed }) => [s.ghostBtn, pressed && s.pressed]} onPress={() => setShowServers(false)}>
               <Text style={s.ghostText}>Cancel</Text>
             </Pressable>
           </View>
@@ -237,6 +239,7 @@ export default function RootLayout() {
 
 const s = StyleSheet.create({
   overlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.94)', alignItems: 'center', justifyContent: 'center', padding: 30 },
+  pressed: { opacity: 0.6 },
   errTitle: { color: C.red, fontSize: 19, fontWeight: '800', marginBottom: 12 },
   errDetail: { color: C.textDim, fontSize: 13, textAlign: 'center', marginBottom: 24, lineHeight: 19 },
   btnRow: { flexDirection: 'row', gap: 12 },

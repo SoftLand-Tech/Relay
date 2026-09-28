@@ -101,7 +101,9 @@ export function ScreenShell({
 
     const seen = new Set(fromServer.map((c) => c.id))
     const locals = Object.values(all)
-      .filter((s) => s.storedId && !seen.has(s.storedId))
+      // `new:` pseudo ids are the optimistic new-chat window's stand-ins —
+      // never drawer rows (their create may still fail).
+      .filter((s) => s.storedId && !s.storedId.startsWith('new:') && !seen.has(s.storedId))
       .sort((a, b) => (b.createdAtMs ?? 0) - (a.createdAtMs ?? 0))
       .map((s) => ({
         id: s.storedId,
@@ -128,28 +130,35 @@ export function ScreenShell({
               : key === 'agent'
                 ? '/(tabs)/agent'
                 : '/(tabs)/settings'
-      router.push(route as never)
+      // navigate, never push: `/(tabs)` is a single route on the root stack,
+      // so push mounts a whole fresh copy of every tab screen each tap —
+      // navigate just switches the tab inside the instance we already have.
+      router.navigate(route as never)
     },
     [router],
   )
 
-  const startNew = useCallback(async () => {
-    try {
-      await newChat()
-      router.push('/(tabs)/chat')
-    } catch {
-      router.push('/(tabs)/chat')
-    }
+  const startNew = useCallback(() => {
+    // Navigate first — and the content swap is synchronous inside newChat
+    // (a placeholder chat takes the screen in the same tick), with the
+    // session.create RPC backgrounded behind it.
+    router.navigate('/(tabs)/chat')
+    void newChat().catch(() => {
+      // The chat screen's retry banner surfaces the failure.
+    })
   }, [router])
 
   const openChat = useCallback(
-    async (storedId: string) => {
-      try {
-        await switchToSession(storedId)
-      } catch {
-        // Fall through to the chat tab; the banner surfaces the error.
-      }
-      router.push('/(tabs)/chat')
+    (storedId: string) => {
+      // Navigate first — and the content swap is synchronous inside
+      // switchToSession (in-memory entry reuse, or a placeholder seeded from
+      // the row + cached transcript), with the session.resume RPC
+      // backgrounded behind it. Same shape as the notification deep-link in
+      // app/_layout.tsx.
+      router.navigate('/(tabs)/chat')
+      void switchToSession(storedId).catch(() => {
+        // The chat screen's retry banner surfaces the error.
+      })
     },
     [router],
   )
@@ -207,7 +216,7 @@ export function ScreenShell({
     <View style={s.root}>
       <View style={[s.topBar, { paddingTop: insets.top + 6 }]}>
         <Pressable
-          style={s.circle}
+          style={({ pressed }) => [s.circle, pressed && s.circlePressed]}
           onPress={() => setOpen(true)}
           hitSlop={8}
           accessibilityLabel="Open menu"
@@ -223,7 +232,12 @@ export function ScreenShell({
         </View>
 
         {onSearch ? (
-          <Pressable style={s.circle} onPress={onSearch} hitSlop={8} accessibilityLabel="Search chats">
+          <Pressable
+            style={({ pressed }) => [s.circle, pressed && s.circlePressed]}
+            onPress={onSearch}
+            hitSlop={8}
+            accessibilityLabel="Search chats"
+          >
             <Ionicons name="search" size={18} color={C.text} />
           </Pressable>
         ) : null}
@@ -252,6 +266,7 @@ export function ScreenShell({
           void loadSessions()
         }}
         onClose={() => setOpen(false)}
+        onRequestOpen={() => setOpen(true)}
         nav={nav}
         recent={recent}
         onNav={go}
@@ -293,6 +308,7 @@ const s = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: C.bgCard,
   },
+  circlePressed: { opacity: 0.55 },
   titleWrap: { flex: 1, paddingHorizontal: 4 },
   brand: { color: C.text, fontSize: 17, fontWeight: '700' },
   title: { color: C.text, fontSize: 16, fontWeight: '600' },

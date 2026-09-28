@@ -6,7 +6,7 @@ import { useRouter } from 'expo-router'
 import { useStore } from '@nanostores/react'
 import { ScreenShell } from '../../src/components/ScreenShell'
 import { C } from '../../src/lib/theme'
-import { loadCatalog, commandCatalog, commandCategories, skillCommands } from '../../src/lib/slash'
+import { loadCatalog, loadSkillDescriptions, commandCatalog, commandCategories, commandDescriptions, skillCommands, skillDescriptions } from '../../src/lib/slash'
 import { isConnected as isConnectedAtom } from '../../src/lib/gateway'
 
 /**
@@ -20,8 +20,12 @@ export default function Skills() {
   const skills = useStore(skillCommands)
   const commands = useStore(commandCatalog)
   const categories = useStore(commandCategories)
+  const cmdDescs = useStore(commandDescriptions)
+  const skillDescs = useStore(skillDescriptions)
   const [query, setQuery] = useState('')
-  const [loading, setLoading] = useState(true)
+  // Spinner only until the FIRST catalog lands — when the chat path already
+  // loaded the registry the lists render on the very first paint.
+  const [loading, setLoading] = useState(() => Object.keys(commandCatalog.get()).length === 0)
   const [tab, setTab] = useState<'commands' | 'skills'>('commands')
 
   useEffect(() => {
@@ -29,32 +33,44 @@ export default function Skills() {
       setLoading(false)
       return
     }
-    setLoading(true)
-    loadCatalog({ force: true })
+    // Serve the in-memory catalog instantly; only hit the wire when empty
+    // (loadCatalog({}) is a no-op once loaded — same lifetime the chat path
+    // and ScreenShell already assume).
+    const cached = Object.keys(commandCatalog.get()).length > 0
+    loadCatalog(cached ? {} : { force: true })
       .catch(() => {})
       .finally(() => setLoading(false))
   }, [online])
 
+  // Skill descriptions arrive via one complete.slash query per skill (the
+  // catalog carries none) — progressive: rows render immediately and the
+  // descriptions fill in as batches land.
+  useEffect(() => {
+    if (tab === 'skills' && online) void loadSkillDescriptions().catch(() => {})
+  }, [tab, online])
+
   const skillList = useMemo(() => {
     const q = query.trim().toLowerCase().replace(/^\//, '')
     return Object.entries(skills)
-      .map(([name, meta]) => ({ name, ...meta }))
-      .filter((s) => !q || s.name.toLowerCase().includes(q))
+      .map(([name, meta]) => ({ name, desc: skillDescs[name.replace(/^\//, '').toLowerCase()], ...meta }))
+      .filter((s) => !q || s.name.toLowerCase().includes(q) || s.desc?.toLowerCase().includes(q))
       .sort((a, b) => (b.usage ?? 0) - (a.usage ?? 0))
-  }, [skills, query])
+  }, [skills, skillDescs, query])
 
   const commandList = useMemo(() => {
     const q = query.trim().toLowerCase()
     return Object.entries(commands)
-      .map(([name, def]) => ({ name, def }))
-      .filter((c) => !q || c.name.toLowerCase().includes(q) || c.def.description?.toLowerCase().includes(q))
-  }, [commands, query])
+      .map(([name, def]) => ({ name, desc: cmdDescs[name.replace(/^\//, '').toLowerCase()] ?? def.description }))
+      .filter((c) => !q || c.name.toLowerCase().includes(q) || c.desc?.toLowerCase().includes(q))
+  }, [commands, cmdDescs, query])
 
   const run = (name: string) => {
     // Skill keys already carry a leading slash — normalise so the composer
     // never ends up with "//airtable".
     const bare = name.replace(/^\/+/, '')
-    router.push({ pathname: '/(tabs)/chat', params: { draft: `/${bare} ` } } as never)
+    // navigate (not push): reuse the mounted tabs group instead of stacking
+    // a fresh copy of every tab screen on each run.
+    router.navigate({ pathname: '/(tabs)/chat', params: { draft: `/${bare} ` } } as never)
   }
 
   return (
@@ -74,7 +90,12 @@ export default function Skills() {
 
         <View style={s.tabs}>
           {(['commands', 'skills'] as const).map((t) => (
-            <Pressable key={t} style={[s.tab, tab === t && s.tabOn]} onPress={() => setTab(t)} accessibilityRole="button">
+            <Pressable
+              key={t}
+              style={({ pressed }) => [s.tab, tab === t && s.tabOn, pressed && s.tabPressed]}
+              onPress={() => setTab(t)}
+              accessibilityRole="button"
+            >
               <Text style={[s.tabText, tab === t && s.tabTextOn]}>{t === 'commands' ? `Commands (${Object.keys(commands).length})` : `Skills (${Object.keys(skills).length})`}</Text>
             </Pressable>
           ))}
@@ -98,9 +119,11 @@ export default function Skills() {
                 accessibilityLabel={item.name}
               >
                 <Text style={s.rowName}>{item.name}</Text>
-                <Text style={s.rowDesc} numberOfLines={2}>
-                  {item.def.description}
-                </Text>
+                {item.desc ? (
+                  <Text style={s.rowDesc} numberOfLines={2}>
+                    {item.desc}
+                  </Text>
+                ) : null}
               </Pressable>
             )}
           />
@@ -119,7 +142,11 @@ export default function Skills() {
                   <Text style={s.rowName}>{item.name}</Text>
                   <Text style={s.badge}>{item.origin ?? 'local'}</Text>
                 </View>
-                {item.usage != null ? <Text style={s.rowDesc}>used {item.usage}×</Text> : null}
+                {item.desc ? (
+                  <Text style={s.rowDesc} numberOfLines={2}>{item.desc}</Text>
+                ) : item.usage != null ? (
+                  <Text style={s.rowDesc}>used {item.usage}×</Text>
+                ) : null}
               </Pressable>
             )}
           />
@@ -136,6 +163,7 @@ const s = StyleSheet.create({
   tabs: { flexDirection: 'row', gap: 8, paddingHorizontal: 16, paddingBottom: 10 },
   tab: { paddingHorizontal: 14, height: 34, borderRadius: 17, backgroundColor: C.bgCard, alignItems: 'center', justifyContent: 'center' },
   tabOn: { backgroundColor: C.accent },
+  tabPressed: { opacity: 0.6 },
   tabText: { color: C.textDim, fontSize: 13, fontWeight: '600' },
   tabTextOn: { color: C.onAccent },
   row: { paddingHorizontal: 10, paddingVertical: 11, borderRadius: 10, minHeight: 48, justifyContent: 'center' },

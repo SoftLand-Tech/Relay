@@ -1,17 +1,20 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import {
   View,
   Text,
   Pressable,
   StyleSheet,
   Animated,
+  BackHandler,
   Easing,
   Image,
+  PanResponder,
+  Platform,
   SectionList,
   TextInput,
   useWindowDimensions,
 } from 'react-native'
-import type { GestureResponderEvent } from 'react-native'
+import type { GestureResponderEvent, PanResponderGestureState, ViewStyle } from 'react-native'
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useStore } from '@nanostores/react'
@@ -47,6 +50,13 @@ interface Props {
   open: boolean
   onClose: () => void
   onOpen?: () => void
+  /**
+   * Ask the owner of `open` to open the drawer — fired by the edge-swipe
+   * gesture. The gesture animates only the cancel cases; every release that
+   * changes state routes through here so the open/close layout effect owns
+   * the final animation leg, the query reset and the dialog drop.
+   */
+  onRequestOpen?: () => void
   nav: NavItem[]
   recent: RecentChat[]
   onNav: (key: string) => void
@@ -104,6 +114,61 @@ function usePopFade(visible: boolean, inMs = 150, outMs = 130) {
   return { anim, rendered }
 }
 
+// ── Drawer swipe tuning (A2-21) ──────────────────────────────────────────────
+// EDGE_W: width of the left-edge catch strip while closed. Kept at 28 with no
+// hitSlop — taps starting inside the strip are swallowed (RN has no touch
+// re-dispatch), so the strip stays narrow AND starts below the top bar
+// (EDGE_TOP_GAP) so it never covers the hamburger button.
+const EDGE_W = 28
+// The top bar's bottom edge sits at insets.top + 52 (paddingTop 6 + 38dp
+// circle + paddingBottom 8); 56 leaves a little slack under it.
+const EDGE_TOP_GAP = 56
+// px of horizontal travel before a drag claims the pan.
+const EDGE_CLAIM = 10
+// |dx| must beat |dy| by this factor, so vertical list scrolls and taps win.
+const DOMINANCE = 1.5
+// px/ms — the unit of gestureState.vx (dt is in ms timestamps).
+const FLICK = 0.25
+const OPEN_MS = 190
+const CLOSE_MS = 150
+// Release below threshold while still closed → spring back.
+const CANCEL_MS = 150
+// Release above threshold while still open → snap back open.
+const SNAP_MS = 180
+
+const clamp01 = (v: number) => (v < 0 ? 0 : v > 1 ? 1 : v)
+
+/** SectionList keyExtractor hoisted to module scope for identity stability. */
+const chatKey = (c: RecentChat) => c.id
+
+/**
+ * Shared grant step for both pan responders: freeze any running settle and
+ * snapshot the live gesture progress. For native-driven values the
+ * stopAnimation callback resolves asynchronously (NativeAnimatedAPI.getValue),
+ * so `moveSeenRef` guards against a late callback clobbering progress the
+ * finger has already moved past.
+ */
+function captureProgress(
+  anim: Animated.Value,
+  progressRef: { current: number },
+  moveSeenRef: { current: boolean },
+) {
+  moveSeenRef.current = false
+  anim.stopAnimation((v) => {
+    if (!moveSeenRef.current) progressRef.current = v
+  })
+}
+
+/**
+ * Native-driven settle for the gesture CANCEL cases only (spring back closed
+ * while still closed; snap back open while still open). Releases that change
+ * drawer state go through onRequestOpen()/onClose() so the open/close layout
+ * effect owns the final leg (prop-flip contract).
+ */
+function settleTo(anim: Animated.Value, toValue: 0 | 1, duration: number) {
+  Animated.timing(anim, { toValue, duration, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start()
+}
+
 /**
  * ChatGPT-style slide-in sidebar.
  *
@@ -124,6 +189,7 @@ export function Sidebar({
   open,
   onClose,
   onOpen,
+  onRequestOpen,
   nav,
   recent,
   onNav,
@@ -138,8 +204,16 @@ export function Sidebar({
   const { width, height } = useWindowDimensions()
   const insets = useSafeAreaInsets()
   const anim = useRef(new Animated.Value(0)).current
-  // Stay mounted through the close animation, then unmount.
-  const [mounted, setMounted] = useState(open)
+  // Mount-on-first-open (A2-16, as revised for the web tab-order review): the
+  // panel/dialog subtree renders on the first open and stays mounted forever
+  // after — only the edge strip exists before that. Zero mount cost on every
+  // subsequent open, and no invisible control is tabbable pre-first-use.
+  const [everOpened, setEverOpened] = useState(false)
+  // Web only: after the close animation finishes, the panel subtree gets
+  // display:'none' — RNW keeps role=button elements tabbable regardless of
+  // pointerEvents/aria-hidden, and display:none is the only thing browsers
+  // reliably drop from the tab order (it also blurs anything focused inside).
+  const [dormant, setDormant] = useState(false)
   // ChatGPT's panel is ~300dp, capped so it never looks empty on a tablet.
   const panelWidth = Math.min(width * 0.82, 320)
   const [query, setQuery] = useState('')
@@ -183,11 +257,50 @@ export function Sidebar({
   const pinned = useStore(pinnedIds)
   const archived = useStore(archivedIds)
 
-  useEffect(() => {
+  // Render-synced refs: gesture and settle callbacks read live values through
+  // these, so their identities never change and the effect below never re-fires
+  // on parent re-renders (A2-19). Worst case of a briefly stale ref is clamped
+  // visual misposition for one gesture.
+  const openRef = useRef(open)
+  openRef.current = open
+  const panelWidthRef = useRef(panelWidth)
+  panelWidthRef.current = panelWidth
+  const widthRef = useRef(width)
+  widthRef.current = width
+  const dialogActiveRef = useRef(false)
+  dialogActiveRef.current = !!(menuFor || renaming || confirming)
+  const onOpenRef = useRef(onOpen)
+  onOpenRef.current = onOpen
+  const onCloseRef = useRef(onClose)
+  onCloseRef.current = onClose
+  const onRequestOpenRef = useRef(onRequestOpen)
+  onRequestOpenRef.current = onRequestOpen
+  const onOpenChatRef = useRef(onOpenChat)
+  onOpenChatRef.current = onOpenChat
+  const searchInputRef = useRef<TextInput>(null)
+  const searchFocusRef = useRef(false)
+  const progressRef = useRef(0)
+  const moveSeenRef = useRef(false)
+  const firstRun = useRef(true)
+
+  // Open/close slide. A layout effect on the `open` prop flip, so no extra
+  // render sits between the tap/gesture-release and the first animated frame;
+  // the tree is already mounted (from the first open on). First run is a no-op:
+  // ScreenShell mounts with open=false and anim already parks at 0 — this also
+  // removes the old accidental mount-time loadSessions.
+  useLayoutEffect(() => {
+    if (firstRun.current) {
+      firstRun.current = false
+      return
+    }
     if (open) {
-      setMounted(true)
+      setDormant(false)
       setQuery('')
-      Animated.timing(anim, { toValue: 1, duration: 220, useNativeDriver: true }).start()
+      Animated.timing(anim, { toValue: 1, duration: OPEN_MS, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start()
+      // A2-20: refresh when the drawer OPENS (ScreenShell's "always re-read
+      // on open" intent). This used to fire in the close branch, where a
+      // 200-row sessionRows.set landed mid chat-switch.
+      onOpenRef.current?.()
       return
     }
     // Leaving also drops any open dialog so nothing survives into the next open.
@@ -196,12 +309,23 @@ export function Sidebar({
     setRenaming(null)
     setConfirming(null)
     setDialogError(null)
-    const a = Animated.timing(anim, { toValue: 0, duration: 180, useNativeDriver: true })
+    searchInputRef.current?.blur()
+    const a = Animated.timing(anim, { toValue: 0, duration: CLOSE_MS, easing: Easing.in(Easing.cubic), useNativeDriver: true })
     a.start(({ finished }) => {
-      if (finished) setMounted(false)
+      if (finished && Platform.OS === 'web') setDormant(true)
     })
-    onOpen?.()
   }, [open, anim])
+
+  // Android hardware back closes the drawer instead of navigating away
+  // (BackHandler is a console-error stub on web, hence the platform gate).
+  useEffect(() => {
+    if (Platform.OS !== 'android' || !open) return
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      onCloseRef.current?.()
+      return true
+    })
+    return () => sub.remove()
+  }, [open])
 
   const searching = query.trim().length > 0
 
@@ -225,7 +349,12 @@ export function Sidebar({
     }))
   }, [recent, pinned, archived, searching, filtered, archOpen])
 
-  const translateX = anim.interpolate({ inputRange: [0, 1], outputRange: [-panelWidth, 0] })
+  // A2-22: memoized so the interpolation node (and its native-driver
+  // attachment) isn't rebuilt on every render during search typing or churn.
+  const translateX = useMemo(
+    () => anim.interpolate({ inputRange: [0, 1], outputRange: [-panelWidth, 0] }),
+    [anim, panelWidth],
+  )
 
   const closeDialogs = () => {
     setMenuFor(null)
@@ -235,15 +364,19 @@ export function Sidebar({
     setDialogError(null)
   }
 
-  /** ChatGPT-style: the menu pops open AT the row that was pressed. */
-  const openMenu = (c: RecentChat, e?: GestureResponderEvent) => {
+  /**
+   * ChatGPT-style: the menu pops open AT the row that was pressed.
+   * Stable identity (reads width through widthRef) so RecentRow and the
+   * SectionList callbacks never churn (A2-18).
+   */
+  const handleRowMenu = useCallback((c: RecentChat, e?: GestureResponderEvent) => {
     const n = e?.nativeEvent
     setMenuAnchor({
-      x: typeof n?.pageX === 'number' ? n.pageX : width - 40,
+      x: typeof n?.pageX === 'number' ? n.pageX : widthRef.current - 40,
       y: typeof n?.pageY === 'number' ? n.pageY : 220,
     })
     setMenuFor(c)
-  }
+  }, [])
 
   const openRename = (c: RecentChat) => {
     setMenuFor(null)
@@ -280,7 +413,147 @@ export function Sidebar({
     else closeDialogs()
   }
 
-  if (!mounted) return null
+  // ── A2-21: edge swipe right to open ──────────────────────────────────────
+  // Lives on a 28dp strip that only exists while closed (see the root JSX).
+  // Positive-dx-only claim so leftward edge drags never grab; onStart is false
+  // so taps stay inert (accepted dead zone). The gesture finger-tracks via JS
+  // setValue on the native-driven `anim`; releases that open route through
+  // onRequestOpen so the layout effect owns the final leg.
+  const edgePan = useMemo(() => {
+    const settle = (_e: GestureResponderEvent, g: PanResponderGestureState) => {
+      if (g.vx > FLICK || progressRef.current > 0.5) {
+        if (onRequestOpenRef.current) onRequestOpenRef.current()
+        else settleTo(anim, 0, CANCEL_MS) // unwired owner: spring back, no stuck state
+      } else {
+        settleTo(anim, 0, CANCEL_MS)
+      }
+    }
+    return PanResponder.create({
+      onStartShouldSetPanResponder: () => false,
+      onMoveShouldSetPanResponder: (_e, g) =>
+        !openRef.current && g.dx > EDGE_CLAIM && g.dx > Math.abs(g.dy) * DOMINANCE,
+      onPanResponderGrant: () => {
+        // Wake the display:none'd subtree (web) so the drag is visible.
+        if (Platform.OS === 'web') setDormant(false)
+        captureProgress(anim, progressRef, moveSeenRef)
+      },
+      onPanResponderMove: (_e, g) => {
+        const p = clamp01(g.dx / panelWidthRef.current)
+        progressRef.current = p
+        moveSeenRef.current = true
+        anim.setValue(p)
+      },
+      onPanResponderRelease: settle,
+      // Stolen mid-gesture: settle by the same rule instead of sticking half-open.
+      onPanResponderTerminate: settle,
+    })
+  }, [anim])
+
+  // ── A2-21: drag left on the panel/scrim to close ──────────────────────────
+  // Capture-phase so it beats the row Pressables, the 350ms long-press, the
+  // scrim tap and SectionList scrolling — but only on horizontal-dominant
+  // leftward drags while open, with no dialog up and the search field not
+  // focused (text-selection drags must keep selecting). Dialogs render as
+  // later siblings above the panel, so they never even reach these handlers.
+  const panelPan = useMemo(() => {
+    const settle = (_e: GestureResponderEvent, g: PanResponderGestureState) => {
+      if (g.vx < -FLICK || progressRef.current < 0.5) onCloseRef.current?.()
+      else settleTo(anim, 1, SNAP_MS)
+    }
+    return PanResponder.create({
+      onStartShouldSetPanResponderCapture: () => false,
+      onMoveShouldSetPanResponderCapture: (_e, g) =>
+        openRef.current &&
+        !dialogActiveRef.current &&
+        !searchFocusRef.current &&
+        g.dx < -EDGE_CLAIM &&
+        Math.abs(g.dx) > Math.abs(g.dy) * DOMINANCE,
+      onPanResponderGrant: () => captureProgress(anim, progressRef, moveSeenRef),
+      onPanResponderMove: (_e, g) => {
+        const p = clamp01(1 + g.dx / panelWidthRef.current)
+        progressRef.current = p
+        moveSeenRef.current = true
+        anim.setValue(p)
+      },
+      onPanResponderRelease: settle,
+      onPanResponderTerminate: settle,
+    })
+  }, [anim])
+
+  // ── A2-18: stable identities for everything the SectionList re-renders ────
+  const handleCloseDrawer = useCallback(() => onCloseRef.current?.(), [])
+  const handleOpenChat = useCallback((id: string) => onOpenChatRef.current(id), [])
+
+  const renderItem = useCallback(
+    ({ item: c }: { item: RecentChat }) => (
+      <RecentRow
+        c={c}
+        isPinned={pinned.includes(c.id)}
+        onOpenChat={handleOpenChat}
+        onCloseDrawer={handleCloseDrawer}
+        onMenu={handleRowMenu}
+      />
+    ),
+    [pinned, handleOpenChat, handleCloseDrawer, handleRowMenu],
+  )
+
+  const renderSectionHeader = useCallback(
+    ({ section }: { section: Section }) => {
+      if (!section.label) return null
+      if (section.collapsible) {
+        return (
+          <Pressable
+            style={s.sectionLabelRow}
+            onPress={() => setArchOpen((v) => !v)}
+            accessibilityLabel={`${archOpen ? 'Collapse' : 'Expand'} archived chats`}
+          >
+            <Text style={s.sectionLabel}>{section.label} ({section.count ?? 0})</Text>
+            <Ionicons name={archOpen ? 'chevron-up' : 'chevron-down'} size={12} color={C.textFaint} />
+          </Pressable>
+        )
+      }
+      return (
+        <View style={s.sectionLabelRow}>
+          <Text style={s.sectionLabel}>{section.label}</Text>
+        </View>
+      )
+    },
+    [archOpen],
+  )
+
+  const renderSectionFooter = useCallback(() => <View style={s.sectionGap} />, [])
+
+  const listEmpty = useCallback(
+    () => (searching ? <Text style={s.noMatch}>No chats matching “{query.trim()}”</Text> : null),
+    [searching, query],
+  )
+
+  // A2-22: memoized dialog scales — stable interpolation nodes.
+  const menuScale = useMemo(() => menuAnim.interpolate({ inputRange: [0, 1], outputRange: [0.88, 1] }), [menuAnim])
+  const renameScale = useMemo(() => renameAnim.interpolate({ inputRange: [0, 1], outputRange: [0.94, 1] }), [renameAnim])
+  const confirmScale = useMemo(() => confirmAnim.interpolate({ inputRange: [0, 1], outputRange: [0.94, 1] }), [confirmAnim])
+
+  // Applied only AFTER the close animation finishes (web), so it never kills
+  // an in-flight slide; the open layout-effect clears it before sliding in.
+  const dormantStyle: ViewStyle | undefined = dormant ? { display: 'none' } : undefined
+
+  // Mount-on-first-open gate: flips during render (React re-runs the component
+  // before committing), so the subtree mounts in the same commit as open=true.
+  if (open && !everOpened) setEverOpened(true)
+
+  if (!everOpened) {
+    // First run: only the edge strip is mounted — nothing under the closed
+    // drawer is blocked, and no invisible control exists to tab into.
+    return (
+      <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
+        <View
+          style={[s.edgeStrip, { top: insets.top + EDGE_TOP_GAP }]}
+          pointerEvents="box-only"
+          {...edgePan.panHandlers}
+        />
+      </View>
+    )
+  }
 
   const menuPinned = shownMenu ? pinned.includes(shownMenu.chat.id) : false
   const menuArchived = shownMenu ? archived.includes(shownMenu.chat.id) : false
@@ -294,13 +567,22 @@ export function Sidebar({
   const menuLeft = anchor ? Math.max(8, Math.min(anchor.x - MENU_W - 6, width - MENU_W - 8)) : 0
   const menuTop = anchor ? Math.max(insets.top + 8, Math.min(anchor.y - 10, height - MENU_H - 16)) : 0
 
-  const menuScale = menuAnim.interpolate({ inputRange: [0, 1], outputRange: [0.88, 1] })
-  const renameScale = renameAnim.interpolate({ inputRange: [0, 1], outputRange: [0.94, 1] })
-  const confirmScale = confirmAnim.interpolate({ inputRange: [0, 1], outputRange: [0.94, 1] })
-
   return (
-    <View style={StyleSheet.absoluteFill} pointerEvents={open ? 'auto' : 'none'}>
-      <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: C.scrim, opacity: anim }]}>
+    // box-none: the overlay itself never blocks the screen underneath — only
+    // the edge strip (while closed) and the scrim/panel (while open) catch.
+    <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
+      {/* Left-edge catch strip (A2-21). Starts below the top bar so it never
+          covers the hamburger; 28dp wide, no hitSlop (accepted dead zone). */}
+      <View
+        style={[s.edgeStrip, { top: insets.top + EDGE_TOP_GAP }]}
+        pointerEvents={open ? 'none' : 'box-only'}
+        {...edgePan.panHandlers}
+      />
+      <Animated.View
+        style={[StyleSheet.absoluteFill, { backgroundColor: C.scrim, opacity: anim }, dormantStyle]}
+        pointerEvents={open ? 'auto' : 'none'}
+        {...panelPan.panHandlers}
+      >
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel="Close menu" />
       </Animated.View>
 
@@ -308,14 +590,24 @@ export function Sidebar({
         style={[
           s.panel,
           { width: panelWidth, paddingTop: insets.top + 6, paddingBottom: insets.bottom + 10, transform: [{ translateX }] },
+          dormantStyle,
         ]}
+        pointerEvents={open ? 'auto' : 'none'}
+        aria-hidden={!open}
+        importantForAccessibility={open ? 'auto' : 'no-hide-descendants'}
+        {...panelPan.panHandlers}
       >
         <View style={s.header}>
           <View style={s.brandRow}>
             <Image source={require('../../assets/logo.png')} style={s.brandLogo} />
             <Text style={s.brand}>Relay</Text>
           </View>
-          <Pressable style={s.iconBtn} onPress={onClose} hitSlop={10} accessibilityLabel="Close menu">
+          <Pressable
+            style={({ pressed }) => [s.iconBtn, pressed && s.iconBtnPressed]}
+            onPress={onClose}
+            hitSlop={10}
+            accessibilityLabel="Close menu"
+          >
             <Ionicons name="close" size={20} color={C.textDim} />
           </Pressable>
         </View>
@@ -347,6 +639,7 @@ export function Sidebar({
             <View style={s.searchWrap}>
               <Ionicons name="search" size={14} color={C.textFaint} />
               <TextInput
+                ref={searchInputRef}
                 style={s.searchInput}
                 value={query}
                 onChangeText={setQuery}
@@ -354,74 +647,43 @@ export function Sidebar({
                 placeholderTextColor={C.textFaint}
                 autoCorrect={false}
                 autoCapitalize="none"
+                editable={open}
                 accessibilityLabel="Search chats"
+                onFocus={() => {
+                  searchFocusRef.current = true
+                }}
+                onBlur={() => {
+                  searchFocusRef.current = false
+                }}
               />
               {query ? (
-                <Pressable onPress={() => setQuery('')} hitSlop={8} accessibilityLabel="Clear search">
+                <Pressable
+                  onPress={() => setQuery('')}
+                  hitSlop={8}
+                  style={({ pressed }) => [s.clearBtn, pressed && s.iconBtnPressed]}
+                  accessibilityLabel="Clear search"
+                >
                   <Ionicons name="close" size={14} color={C.textFaint} />
                 </Pressable>
               ) : null}
             </View>
             <SectionList<RecentChat, Section>
               sections={sections}
-              keyExtractor={(c) => c.id}
+              keyExtractor={chatKey}
               style={{ flex: 1 }}
               contentContainerStyle={{ paddingBottom: 8 }}
               showsVerticalScrollIndicator={false}
               keyboardShouldPersistTaps="handled"
-              renderItem={({ item: c }) => {
-                const isPinned = pinned.includes(c.id)
-                return (
-                  <Pressable
-                    onPress={() => {
-                      onOpenChat(c.id)
-                      onClose()
-                    }}
-                    onLongPress={(e) => openMenu(c, e)}
-                    delayLongPress={350}
-                    style={({ pressed }) => [s.recentRow, pressed && s.recentRowPressed]}
-                    accessibilityLabel={`Open ${c.title}`}
-                  >
-                    <Text style={[s.recentTitle, c.active && s.recentTitleActive]} numberOfLines={1}>
-                      {c.title}
-                    </Text>
-                    {isPinned ? <Ionicons name="pin" size={11} color={C.textFaint} /> : null}
-                    <StatusDot status={c.status} />
-                    <Pressable
-                      style={s.rowMenu}
-                      hitSlop={6}
-                      onPress={(e) => openMenu(c, e)}
-                      accessibilityLabel={`Options for ${c.title}`}
-                    >
-                      <Ionicons name="ellipsis-horizontal" size={15} color={C.textFaint} />
-                    </Pressable>
-                  </Pressable>
-                )
-              }}
-              renderSectionHeader={({ section }) => {
-                if (!section.label) return null
-                if (section.collapsible) {
-                  return (
-                    <Pressable
-                      style={s.sectionLabelRow}
-                      onPress={() => setArchOpen((v) => !v)}
-                      accessibilityLabel={`${archOpen ? 'Collapse' : 'Expand'} archived chats`}
-                    >
-                      <Text style={s.sectionLabel}>{section.label} ({section.count ?? 0})</Text>
-                      <Ionicons name={archOpen ? 'chevron-up' : 'chevron-down'} size={12} color={C.textFaint} />
-                    </Pressable>
-                  )
-                }
-                return (
-                  <View style={s.sectionLabelRow}>
-                    <Text style={s.sectionLabel}>{section.label}</Text>
-                  </View>
-                )
-              }}
-              renderSectionFooter={() => <View style={s.sectionGap} />}
-              ListEmptyComponent={
-                searching ? <Text style={s.noMatch}>No chats matching “{query.trim()}”</Text> : null
-              }
+              // A2-17: a drawer doesn't need ~20 viewports of pre-render —
+              // 44dp rows make windowSize=5 plenty.
+              windowSize={5}
+              maxToRenderPerBatch={8}
+              updateCellsBatchingPeriod={50}
+              initialNumToRender={12}
+              renderItem={renderItem}
+              renderSectionHeader={renderSectionHeader}
+              renderSectionFooter={renderSectionFooter}
+              ListEmptyComponent={listEmpty}
             />
           </>
         ) : (
@@ -593,7 +855,62 @@ function MenuRow({
   )
 }
 
+/**
+ * One recent-chat row (A2-18): memoized and handed stable callbacks, so search
+ * keystrokes, dialog state and store ticks only re-render rows whose props
+ * actually changed. The row calls back with primitives (ids) instead of
+ * receiving fresh closures per render.
+ */
+const RecentRow = React.memo(function RecentRow({
+  c,
+  isPinned,
+  onOpenChat,
+  onCloseDrawer,
+  onMenu,
+}: {
+  c: RecentChat
+  isPinned: boolean
+  onOpenChat: (id: string) => void
+  onCloseDrawer: () => void
+  onMenu: (c: RecentChat, e?: GestureResponderEvent) => void
+}) {
+  return (
+    <Pressable
+      onPress={() => {
+        onOpenChat(c.id)
+        onCloseDrawer()
+      }}
+      onLongPress={(e) => onMenu(c, e)}
+      delayLongPress={350}
+      style={({ pressed }) => [s.recentRow, pressed && s.recentRowPressed]}
+      accessibilityLabel={`Open ${c.title}`}
+    >
+      <Text style={[s.recentTitle, c.active && s.recentTitleActive]} numberOfLines={1}>
+        {c.title}
+      </Text>
+      {isPinned ? <Ionicons name="pin" size={11} color={C.textFaint} /> : null}
+      <StatusDot status={c.status} />
+      <Pressable
+        style={s.rowMenu}
+        hitSlop={6}
+        onPress={(e) => onMenu(c, e)}
+        accessibilityLabel={`Options for ${c.title}`}
+      >
+        <Ionicons name="ellipsis-horizontal" size={15} color={C.textFaint} />
+      </Pressable>
+    </Pressable>
+  )
+})
+
 const s = StyleSheet.create({
+  // Left-edge catch strip for the swipe-to-open gesture. `top` is set inline
+  // (insets.top + EDGE_TOP_GAP) to clear the top bar/hamburger.
+  edgeStrip: {
+    position: 'absolute',
+    left: 0,
+    bottom: 0,
+    width: EDGE_W,
+  },
   panel: {
     position: 'absolute',
     top: 0,
@@ -615,6 +932,8 @@ const s = StyleSheet.create({
   brandRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   brandLogo: { width: 24, height: 18, resizeMode: 'contain' },
   iconBtn: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center' },
+  iconBtnPressed: { opacity: 0.5 },
+  clearBtn: { width: 26, height: 26, alignItems: 'center', justifyContent: 'center' },
   navRow: {
     flexDirection: 'row',
     alignItems: 'center',
