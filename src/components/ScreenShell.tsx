@@ -6,17 +6,19 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useStore } from '@nanostores/react'
 import { Sidebar, type NavItem, type RecentChat } from './Sidebar'
 import { C } from '../lib/theme'
-import { isConnected as isConnectedAtom } from '../lib/gateway'
+import { isConnected as isConnectedAtom, rpc } from '../lib/gateway'
 import {
   activeStoredId,
   busyStoredIds,
   pendingStoredIds,
+  forgetSession,
   newChat,
   switchToSession,
   sessionsById,
 } from '../lib/chat'
 import { loadCatalog } from '../lib/slash'
-import { loadSessions, sessionRows } from '../lib/sessionList'
+import { loadSessions, patchRowTitle, sessionRows, toMs } from '../lib/sessionList'
+import { forgetChatMarks, loadChatMarks, toggleArchive, togglePin } from '../lib/chatListState'
 
 /**
  * ChatGPT-style shell: a compact top bar with a hamburger, the screen title,
@@ -68,6 +70,11 @@ export function ScreenShell({
     void loadCatalog().catch(() => {})
   }, [])
 
+  // Pin/archive marks are app-local; restore them once at startup.
+  React.useEffect(() => {
+    void loadChatMarks()
+  }, [])
+
   const nav = useMemo<NavItem[]>(() => [
     { key: 'chat', label: 'Chat', icon: 'chatbubble-outline' },
     { key: 'automations', label: 'Automations', icon: 'timer-outline' },
@@ -84,6 +91,7 @@ export function ScreenShell({
     const fromServer = rows.map((r) => ({
       id: r.id,
       title: r.title || r.preview?.slice(0, 60) || 'Untitled',
+      ts: toMs(r.started_at),
       unread: pending.includes(r.id),
       busy: busy.includes(r.id),
       active: r.id === current,
@@ -96,6 +104,7 @@ export function ScreenShell({
       .map((s) => ({
         id: s.storedId,
         title: s.title || 'New chat',
+        ts: s.createdAtMs ?? 0,
         unread: pending.includes(s.storedId),
         busy: busy.includes(s.storedId),
         active: s.storedId === current,
@@ -143,6 +152,55 @@ export function ScreenShell({
     },
     [router],
   )
+
+  // ── Per-chat actions (surfaced by the sidebar's long-press / ⋯ menu) ──────
+  // Each returns an error message for the dialog, or null on success —
+  // react-native-web's Alert.alert is a no-op, so errors must render in-app.
+
+  const liveIdOf = useCallback(
+    (storedId: string) => Object.values(sessionsById.get()).find((s) => s.storedId === storedId)?.id,
+    [],
+  )
+
+  const handlePinToggle = useCallback((id: string) => togglePin(id), [])
+  const handleArchiveToggle = useCallback((id: string) => toggleArchive(id), [])
+
+  const handleRename = useCallback(async (storedId: string, title: string) => {
+    try {
+      // `session.title` with an explicit title writes user-provenance; the
+      // auto-titler never overwrites those, so a manual rename sticks.
+      await rpc('session.title', { session_id: storedId, title })
+      patchRowTitle([storedId], title)
+      return null
+    } catch (e) {
+      return e instanceof Error ? e.message : 'Rename failed'
+    }
+  }, [])
+
+  const handleDelete = useCallback(async (storedId: string) => {
+    try {
+      // The gateway refuses to delete the ACTIVE session: detach the UI into
+      // a fresh chat first, then tear the old runtime down so the delete lands.
+      if (activeStoredId.get() === storedId) await newChat()
+      const live = liveIdOf(storedId)
+      if (live) {
+        try {
+          await rpc('session.close', { session_id: live })
+        } catch {
+          // Best effort — a dead socket or an already-closed session must not
+          // block the delete itself.
+        }
+      }
+      await rpc('session.delete', { session_id: storedId })
+      if (live) await forgetSession(live)
+      // Drop the row so the drawer updates without waiting for a poll.
+      sessionRows.set(sessionRows.get().filter((r) => r.id !== storedId))
+      forgetChatMarks(storedId)
+      return null
+    } catch (e) {
+      return e instanceof Error ? e.message : 'Delete failed'
+    }
+  }, [liveIdOf])
 
   return (
     <View style={s.root}>
@@ -198,6 +256,10 @@ export function ScreenShell({
         onNav={go}
         onNewChat={startNew}
         onOpenChat={openChat}
+        onPinToggle={handlePinToggle}
+        onArchiveToggle={handleArchiveToggle}
+        onRename={handleRename}
+        onDelete={handleDelete}
         footer={
           pending.length > 0 ? (
             <View style={s.footerNote}>
