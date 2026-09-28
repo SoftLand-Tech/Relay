@@ -2,6 +2,43 @@
 
 **Hermes Pocket** is an open-source Expo (React Native) mobile client for a self-hosted Hermes agent gateway. It puts the agent that runs on your own computer in your pocket: streamed replies with live reasoning blocks, tool activity, approvals and questions you can answer from your phone, scheduled automations, voice in/out through your gateway's providers, and multi-computer pairing — all talking to *your* server over the same JSON-RPC protocol the desktop app uses. The gateway holds the keys and the sessions; the phone is just a very convenient window onto them.
 
+## Screenshots
+
+The web build at phone size, connected to a real gateway:
+
+<table>
+  <tr>
+    <td><img src="docs/screenshots/01-pairing.png" width="200" alt="Pairing screen: scan the QR from hermes-pair.sh, paste a connect link, or reconnect a remembered computer"></td>
+    <td><img src="docs/screenshots/02-chat.png" width="200" alt="New chat with the composer and the current model pill"></td>
+    <td><img src="docs/screenshots/03-streaming.png" width="200" alt="A reply streaming live with a collapsed Thinking block showing elapsed time and tok/s"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>Pairing</sub></td>
+    <td align="center"><sub>New chat</sub></td>
+    <td align="center"><sub>Streaming + thinking</sub></td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/04-reply.png" width="200" alt="Finished reply rendered as Markdown: bullets and a cron code block"></td>
+    <td><img src="docs/screenshots/05-sidebar.png" width="200" alt="Sidebar: chat search, grouped chat list (Today, Yesterday, …), pin/archive marks"></td>
+    <td><img src="docs/screenshots/07-models.png" width="200" alt="Models screen: provider and model picker, reasoning effort, show-thinking toggle"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>Rendered reply</sub></td>
+    <td align="center"><sub>Sidebar & chat list</sub></td>
+    <td align="center"><sub>Models & reasoning</sub></td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/08-automations.png" width="200" alt="Automations screen: cron jobs with schedules, run-now and pause"></td>
+    <td><img src="docs/screenshots/09-skills.png" width="200" alt="Skills screen: slash commands and skills served by the gateway"></td>
+    <td><img src="docs/screenshots/10-settings.png" width="200" alt="Settings: remembered computers and notification options"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>Automations</sub></td>
+    <td align="center"><sub>Commands & skills</sub></td>
+    <td align="center"><sub>Settings</sub></td>
+  </tr>
+</table>
+
 ## Features
 
 Everything below is what the client actually implements — nothing is hardcoded against a particular server beyond the gateway contract:
