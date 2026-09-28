@@ -3,106 +3,194 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Setup — Relay</title>
-  <meta name="description" content="Get Relay running: install, start the dev server, pair it with your self-hosted Hermes gateway, and reach it from anywhere." />
+  <title>Setup guide — Relay</title>
+  <meta name="description" content="Install the Hermes agent on your computer, put Relay on your phone, and pair them with one QR code. A beginner-friendly walkthrough." />
   <link rel="icon" href="assets/favicon.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700;12..96,800&family=Hanken+Grotesk:wght@400;600;700&display=swap" />
   <link rel="stylesheet" href="relay.css" />
 </head>
 <body>
 
-<nav class="nav">
-  <div class="nav-inner">
-    <a class="nav-logo" href="./">
-      <img src="assets/logo.png" alt="Relay" />
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="./">
+      <img src="assets/logo.png" alt="" />
+      <span class="word">Relay</span>
     </a>
-    <div class="nav-links">
-      <a class="nav-text" href="index.html">Home</a>
-      <a class="nav-text" href="index.html#screenshots">Screenshots</a>
-      <a class="btn" href="https://github.com/SoftLand-Tech/Relay">GitHub</a>
-    </div>
+    <nav class="topnav">
+      <a class="link" href="index.html">Home</a>
+      <a class="link" href="https://github.com/SoftLand-Tech/Relay#readme">README</a>
+      <a class="btn" href="https://github.com/SoftLand-Tech/Relay">
+        <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>
+        GitHub
+      </a>
+    </nav>
   </div>
-</nav>
+</header>
 
-<section style="border-top: none;">
-  <div class="wrap prose">
-    <h2>Setup guide</h2>
-    <p>
-      Relay is client-only — before the app can chat, you need a
-      <strong>self-hosted Hermes gateway</strong> you control (your own computer, a VPS,
-      anything that stays on). Set one up with the
-      <a href="https://github.com/NousResearch/hermes-agent">upstream Hermes project</a>,
-      then come back here.
+<main>
+<section class="section" style="border-top: none;">
+  <div class="wrap guide">
+    <div class="section-head">
+      <h2>From zero to chatting</h2>
+    </div>
+    <p class="lede">
+      By the end of this page you'll have an AI agent running on your own
+      computer and the Relay app on your phone, paired and talking. No accounts
+      anywhere, and everything you install belongs to you.
+    </p>
+    <p class="lede">
+      You need: a computer you can leave on (a laptop is fine to start), a
+      phone, and about half an hour.
     </p>
 
-    <h2>1 · Install and run</h2>
-    <pre><code>git clone https://github.com/SoftLand-Tech/Relay.git
+    <h2><span class="n">1</span>Put the agent on your computer</h2>
+    <p>
+      Relay is the remote control; the thinking happens in
+      <strong>Hermes</strong>, a free, open-source agent that runs on your own
+      machine. Installing it is one line in a terminal:
+    </p>
+    <div class="term">
+      <button class="copy" type="button">Copy</button>
+      <pre><code>curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash</code></pre>
+    </div>
+    <p>
+      On Windows, use PowerShell with
+      <code>iex (irm https://hermes-agent.nousresearch.com/install.ps1)</code>
+      instead. When it finishes, open a fresh terminal and run:
+    </p>
+    <div class="term">
+      <button class="copy" type="button">Copy</button>
+      <pre><code>hermes setup</code></pre>
+    </div>
+    <p>
+      <strong>hermes setup</strong> is a friendly wizard: it asks which AI
+      provider you want to use (the companies behind the models; you'll need
+      an API key from one of them) and checks that everything works. When it's
+      done, you can already chat with your agent by running <code>hermes</code>.
+    </p>
+    <div class="aside">
+      <b>New to this?</b> An API key is a long password a model company gives
+      you. You paste it in once and pay them directly for what you use. Hermes
+      works with the usual providers; the wizard lists them.
+    </div>
+
+    <h2><span class="n">2</span>Turn on the gateway</h2>
+    <p>
+      Right now your agent only talks inside its own window. The
+      <strong>gateway</strong> is the part that lets other things, like your phone,
+      reach it:
+    </p>
+    <div class="term">
+      <button class="copy" type="button">Copy</button>
+      <pre><code>hermes gateway setup
+hermes gateway start</code></pre>
+    </div>
+    <p>
+      Setup asks a couple of questions and hands out a <strong>session
+      token</strong>: the house key other apps will use. Keep
+      the gateway running (a terminal window is fine for tonight).
+    </p>
+
+    <h2><span class="n">3</span>Put Relay on your phone</h2>
+    <p>
+      Relay is young: it's not in the app stores yet, so tonight we run it the
+      developer way. It takes three minutes and needs no coding:
+    </p>
+    <ul class="checklist">
+      <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg><span>On your phone, install <strong>Expo Go</strong> from the App Store or Play Store (a free helper app for running projects like this).</span></li>
+      <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg><span>On the computer, download Relay and start it:</span></li>
+    </ul>
+    <div class="term">
+      <button class="copy" type="button">Copy</button>
+      <pre><code>git clone https://github.com/SoftLand-Tech/Relay.git
 cd Relay
 npm install
-
-npx expo start
-# press w (web), a (Android), i (iOS) — or scan with Expo Go</code></pre>
+npm start</code></pre>
+    </div>
     <p>
-      Requirements: <strong>Node 22.x</strong> and npm. The project tracks
-      <strong>Expo SDK 57</strong> — if you plan to change code, read the
-      <a href="https://docs.expo.dev/versions/v57.0.0/">versioned SDK 57 docs</a> first;
-      the SDK has changed substantially from earlier versions.
+      A QR code appears in the terminal. Scan it with <strong>Expo Go</strong>
+      and Relay opens on your phone. (You'll need
+      <a href="https://nodejs.org">Node.js</a> installed for this part;
+      the long-term-support version is fine.)
     </p>
-    <div class="note">
-      Without a gateway the app stops at the pairing screen — there is no demo mode.
-      To exercise just the protocol layer offline, the repo ships node-runnable suites:
-      <code>npm run test</code>, <code>npm run test:slash</code>.
+
+    <h2><span class="n">4</span>Pair the two</h2>
+    <p>
+      One last command on the computer. It prints a QR code (or a link, if
+      your terminal can't draw one) that tells Relay where your gateway lives
+      and lets it in:
+    </p>
+    <div class="term">
+      <button class="copy" type="button">Copy</button>
+      <pre><code>./scripts/hermes-pair.sh --host 192.168.1.20 --port 8080</code></pre>
+    </div>
+    <p>
+      Use your own two numbers in place of the example: the address of the
+      computer on your home network, and the port your gateway mentioned when
+      it started in step 2. Then point Relay's camera at the QR code, and
+      that's it. The app remembers this computer and reconnects to it on its
+      own from now on. No camera handy? Tap <em>More options</em> in Relay and
+      paste the link the script printed.
+    </p>
+    <div class="aside">
+      <b>If it asks for a token:</b> the first time you pair, the script may
+      ask for your gateway's session token (its long name is the
+      <em>dashboard session token</em>). That's the long key your gateway
+      created when it was set up in step 2. Paste it when asked; it never gets
+      typed on the phone.
     </div>
 
-    <h2>2 · Pair with your gateway</h2>
+    <h2><span class="n">5</span>Use it away from home</h2>
     <p>
-      On the machine running the gateway, print a QR (or a pairing link):
+      On your own Wi-Fi this just works. To reach your agent from the office or
+      the train, install <a href="https://tailscale.com">Tailscale</a> (a free,
+      well-regarded tool that quietly connects your devices to each other over
+      the internet) on both the computer and the phone. Then pair once more
+      using the computer's Tailscale address with the <code>--tls</code> flag,
+      and you have a second entry in Relay's computer list for the road.
     </p>
-    <pre><code>./scripts/hermes-pair.sh --host &lt;gateway-host&gt; --port &lt;gateway-port&gt; --token &lt;token&gt;
-# add --tls for wss (tailnet / public host)</code></pre>
+
+    <h2>If something doesn't work</h2>
     <ul>
-      <li>The token is the gateway's <strong>dashboard session token</strong>; the script reads it from <code>HERMES_DASHBOARD_SESSION_TOKEN</code> and prompts if missing.</li>
-      <li>Point your phone at the QR in Relay's onboarding — or paste the <code>hermes://connect?…</code> link via <em>More options</em>.</li>
-      <li>The token is stored in the device keystore (SecureStore, with a web fallback), and the computer is remembered for one-tap reconnect.</li>
+      <li><strong>Relay says it can't reach the computer</strong>: make sure the gateway is still running and both devices are on the same network (or Tailscale is on, on both).</li>
+      <li><strong>The QR scan does nothing</strong>: use the script's printed link: in Relay tap <em>More options</em> and paste the <code>hermes://connect…</code> line.</li>
+      <li><strong>Wrong port</strong>: the pairing command prints the address it's using; check it matches what your gateway said when it started.</li>
     </ul>
-
-    <h2>3 · Reach it away from home</h2>
-    <ul>
-      <li><strong>Same network:</strong> pair with the machine's LAN address over plain <code>ws://</code>.</li>
-      <li><strong>Anywhere:</strong> install <a href="https://tailscale.com">Tailscale</a> (or your VPN of choice) on both machines and pair with the tailnet hostname + <code>--tls</code>. Works over mobile data, no port forwarding.</li>
-      <li>Pair the <em>same</em> machine twice — LAN and VPN — and switch between both entries from Settings → <em>Computers</em>.</li>
-    </ul>
-
-    <h2>4 · Optional: push for approvals</h2>
     <p>
-      Local alerts work out of the box while the socket is alive. For notifications
-      with the app closed, build with <a href="https://docs.expo.dev/eas/">EAS</a>
-      (<code>npx eas build</code>), grab a push token in Settings, and run the repo's
-      watcher on the gateway machine:
-    </p>
-    <pre><code>./scripts/hermes-push-watch.sh \
-  --host 127.0.0.1:&lt;gateway-port&gt; \
-  --token &lt;token&gt; \
-  --push-token 'ExponentPushToken[xxxx]'</code></pre>
-
-    <h2>Going deeper</h2>
-    <p>
-      The <a href="https://github.com/SoftLand-Tech/Relay#readme">README</a> has the
-      full manual: the gateway contract (JSON-RPC v7 over WebSocket), every npm
-      script, Expo Go vs development builds, and the protocol gotchas the code
-      encodes deliberately.
+      The <a href="https://github.com/SoftLand-Tech/Relay#readme">README</a> has
+      the full manual: every screen, every command, and the phone-app side of
+      push notifications, voice and automations.
     </p>
   </div>
 </section>
+</main>
 
 <footer>
   <div class="wrap">
-    <span>Relay — MIT license</span>
+    <span>Relay</span>
     <span class="sep">·</span>
     <a href="index.html">Home</a>
     <span class="sep">·</span>
     <a href="https://github.com/SoftLand-Tech/Relay">GitHub</a>
+    <span class="sep">·</span>
+    <span>Agent by the open-source <a href="https://github.com/NousResearch/hermes-agent">Hermes project</a> · MIT</span>
   </div>
 </footer>
+
+<script>
+  document.querySelectorAll(".term .copy").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      var code = btn.parentElement.querySelector("code").innerText;
+      navigator.clipboard.writeText(code).then(function () {
+        btn.textContent = "Copied";
+        setTimeout(function () { btn.textContent = "Copy"; }, 1600);
+      });
+    });
+  });
+</script>
 
 </body>
 </html>

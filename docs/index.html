@@ -3,139 +3,252 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Relay — your agent, in your pocket</title>
-  <meta name="description" content="Relay is the open-source mobile client for a self-hosted Hermes agent gateway: streaming chat with live reasoning, approvals from your phone, automations, and multi-computer pairing." />
+  <title>Relay — your own AI agent, in your pocket</title>
+  <meta name="description" content="Relay is a free, open-source phone app for your self-hosted AI agent. Your phone talks straight to your computer — no platform in between, no accounts." />
   <link rel="icon" href="assets/favicon.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700;12..96,800&family=Hanken+Grotesk:wght@400;600;700&display=swap" />
   <link rel="stylesheet" href="relay.css" />
 </head>
 <body>
+<!--
+  THESIS: a self-hosted agent deserves a phone app that talks straight to it —
+  this landing refuses the SaaS-landing habit of stock hero + feature card grid,
+  and proves the product with miniature copies of its own UI.
+  OWN-WORLD: calm night-teal field (#0E181B), cyan reserved for action and the
+  Relay side of every comparison; Plus Jakarta Sans display voice; authored
+  1.6px-stroke SVG icons; CSS miniatures of the real chat UI as illustrations.
+  STORY: the visitor gets what Relay is in one line, sees the honest
+  bot-versus-app comparison, believes the direct-connection story, and lands on
+  a beginner-safe setup guide that installs Hermes first, then Relay, then pairs
+  them with a QR code.
+  FIRST VIEWPORT: left column carries a six-word headline with one cyan word,
+  a two-sentence plain-language lede, two pills (Get started, GitHub); right
+  column a floating phone showing the real streaming screen. Primary action is
+  the cyan Get started pill.
+  FORM: user-pinned direction (warm consumer voice inside the app's brand
+  world; no emojis, no terminal aesthetic, no screenshot gallery) — pinned by
+  the owner's brief, no seed roll.
+  FINISH: unreviewed and undocumented is unfinished; this build ends with the
+  finish review, the verdict, DESIGN.md, and every shipping raster carrying its
+  provenance.
+-->
 
-<nav class="nav">
-  <div class="nav-inner">
-    <a class="nav-logo" href="./">
-      <img src="assets/logo.png" alt="Relay" />
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="./">
+      <img src="assets/logo.png" alt="" />
+      <span class="word">Relay</span>
     </a>
-    <div class="nav-links">
-      <a class="nav-text" href="#features">Features</a>
-      <a class="nav-text" href="#screenshots">Screenshots</a>
-      <a class="nav-text" href="setup.html">Setup</a>
-      <a class="btn" href="https://github.com/SoftLand-Tech/Relay">GitHub</a>
-    </div>
-  </div>
-</nav>
-
-<header class="hero">
-  <div class="wrap hero-grid">
-    <div>
-      <p class="kicker">SELF-HOSTED AGENT</p>
-      <h1>Your agent,<br />in your pocket.</h1>
-      <p class="lede">
-        Relay is an open-source Expo (React Native) client for a
-        <strong>self-hosted Hermes agent gateway</strong>. Streamed replies with live
-        reasoning, approvals you can answer from your phone, scheduled automations —
-        all talking to <em>your</em> server. The gateway holds the keys; Relay is the window.
-      </p>
-      <div class="hero-cta">
-        <a class="btn" href="setup.html">Get started</a>
-        <a class="btn ghost" href="https://github.com/SoftLand-Tech/Relay">View on GitHub</a>
-      </div>
-      <div class="hero-badges">
-        <span class="chip">MIT license</span>
-        <span class="chip">Expo SDK 57</span>
-        <span class="chip">iOS · Android · Web</span>
-        <span class="chip">No cloud, no accounts</span>
-      </div>
-    </div>
-    <div class="phone">
-      <img src="screenshots/03-streaming.png" alt="Relay streaming a reply with a live Thinking block" width="264" />
-    </div>
+    <nav class="topnav">
+      <a class="link" href="setup.html">How to set it up</a>
+      <a class="link" href="https://github.com/SoftLand-Tech/Relay#readme">README</a>
+      <a class="btn" href="https://github.com/SoftLand-Tech/Relay">
+        <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>
+        GitHub
+      </a>
+    </nav>
   </div>
 </header>
 
-<section id="features">
+<main>
+
+<section class="hero">
+  <div class="wrap hero-grid">
+    <div>
+      <h1>Your own AI. <em>In your pocket.</em></h1>
+      <p class="lede">
+        Relay is a free, open-source phone app for the AI agent running on your
+        own computer. Your phone talks straight to it: no platform in between,
+        no accounts, no monthly fee.
+      </p>
+      <div class="hero-cta">
+        <a class="btn" href="setup.html">Set it up tonight</a>
+        <a class="btn ghost" href="https://github.com/SoftLand-Tech/Relay">Browse the code</a>
+      </div>
+      <div class="hero-foot">
+        <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>Open source, MIT</span>
+        <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>iOS, Android and web</span>
+        <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>Your keys stay on your computer</span>
+      </div>
+    </div>
+    <div class="phone">
+      <img src="screenshots/03-streaming.png" alt="Relay streaming an answer with its thinking visible" width="286" />
+    </div>
+  </div>
+</section>
+
+<section class="section">
   <div class="wrap">
-    <h2 class="section-title">Everything the gateway can do, from your phone</h2>
-    <p class="section-sub">
-      Nothing is hardcoded against a particular server — inventories of commands,
-      skills and models are fetched from your gateway at runtime.
-    </p>
-    <div class="grid">
-      <div class="card">
-        <h3><span class="ico">⚡</span>Streaming + thinking</h3>
-        <p>Answers stream token-by-token; reasoning arrives as collapsible <em>Thinking</em> blocks with elapsed time and ~tok/s. Markdown renders on completion, with copy and listen on every reply.</p>
+    <div class="section-head">
+      <h2>How it fits together</h2>
+      <p>No cloud, no middleman. Two things you own, talking to each other. The agent is the thinker; the gateway is its front door; Relay is the phone in your hand.</p>
+    </div>
+    <div class="ledger">
+      <div class="step">
+        <div class="dot"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8m-4-4v4"/></svg></div>
+        <div>
+          <h3>An agent lives on your computer</h3>
+          <p>The open-source <a href="https://github.com/NousResearch/hermes-agent">Hermes agent</a> runs on a machine you control: your laptop, an old desktop, even a small server. It holds your AI account keys (so they stay on your machine) and does the actual thinking.</p>
+        </div>
       </div>
-      <div class="card">
-        <h3><span class="ico">✅</span>Answer from anywhere</h3>
-        <p>Approvals, clarifications, sudo and secret requests arrive as interactive cards over the same socket — answer them from the grocery store, not just the desk.</p>
+      <div class="step">
+        <div class="dot"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="7" y="2.5" width="10" height="19" rx="3"/><path d="M11 18.5h2"/></svg></div>
+        <div>
+          <h3>Relay is its remote control</h3>
+          <p>Install Relay on your phone, scan one QR code, and the two are paired. From then on the app opens a direct line to your agent whenever you use it.</p>
+        </div>
       </div>
-      <div class="card">
-        <h3><span class="ico">💬</span>Multi-session sidebar</h3>
-        <p>Every conversation is an independent session. Search across all chats, pin / rename / archive / delete, grouped into Today, Yesterday and older.</p>
-      </div>
-      <div class="card">
-        <h3><span class="ico">🔗</span>Multi-computer pairing</h3>
-        <p>Pair your desk and your laptop: every gateway is remembered, Relay reconnects to the last one on launch, and tokens live in the device keystore — never in git.</p>
-      </div>
-      <div class="card">
-        <h3><span class="ico">⌘</span>Slash commands &amp; skills</h3>
-        <p>Typing <code>/</code> drives off the gateway's own command registry, so new server-side commands and skills appear without an app update.</p>
-      </div>
-      <div class="card">
-        <h3><span class="ico">⏰</span>Automations</h3>
-        <p>Create, edit, pause and run cron jobs — <code>every 30m</code>, <code>in 45m</code>, <code>every monday 9:00</code>. Jobs run on the gateway, so they fire even when the app is closed.</p>
+      <div class="step">
+        <div class="dot"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v4m0 10v4M3 12h4m10 0h4"/><circle cx="12" cy="12" r="3.2"/></svg></div>
+        <div>
+          <h3>Talk from the sofa, or from another city</h3>
+          <p>At home it just works. Away from home a free tool like Tailscale keeps the line open safely. Same app, same agent, anywhere.</p>
+        </div>
       </div>
     </div>
   </div>
 </section>
 
-<section id="screenshots">
+<section class="section">
   <div class="wrap">
-    <h2 class="section-title">The real app</h2>
-    <p class="section-sub">Captured from the web build at phone size, connected to a live gateway.</p>
-    <div class="shots">
-      <a href="screenshots/01-pairing.png"><figure><img src="screenshots/01-pairing.png" alt="Pairing screen" loading="lazy" /><figcaption>Pairing</figcaption></figure></a>
-      <a href="screenshots/03-streaming.png"><figure><img src="screenshots/03-streaming.png" alt="Streaming reply with Thinking block" loading="lazy" /><figcaption>Streaming + thinking</figcaption></figure></a>
-      <a href="screenshots/04-reply.png"><figure><img src="screenshots/04-reply.png" alt="Finished reply rendered as Markdown" loading="lazy" /><figcaption>Rendered reply</figcaption></figure></a>
-      <a href="screenshots/05-sidebar.png"><figure><img src="screenshots/05-sidebar.png" alt="Sidebar with grouped chat list" loading="lazy" /><figcaption>Sidebar &amp; chat list</figcaption></figure></a>
-      <a href="screenshots/07-models.png"><figure><img src="screenshots/07-models.png" alt="Models and reasoning effort" loading="lazy" /><figcaption>Models &amp; reasoning</figcaption></figure></a>
-      <a href="screenshots/08-automations.png"><figure><img src="screenshots/08-automations.png" alt="Automations" loading="lazy" /><figcaption>Automations</figcaption></figure></a>
-      <a href="screenshots/09-skills.png"><figure><img src="screenshots/09-skills.png" alt="Commands and skills" loading="lazy" /><figcaption>Commands &amp; skills</figcaption></figure></a>
-      <a href="screenshots/10-settings.png"><figure><img src="screenshots/10-settings.png" alt="Settings with remembered computers" loading="lazy" /><figcaption>Settings</figcaption></figure></a>
-      <a href="screenshots/02-chat.png"><figure><img src="screenshots/02-chat.png" alt="New chat" loading="lazy" /><figcaption>New chat</figcaption></figure></a>
+    <div class="section-head">
+      <h2>Why not just message a bot on Telegram?</h2>
+      <p>Honest question. The Hermes gateway even ships a Telegram bot, and it's a fine way to start. Here's what changes when the phone gets an app of its own.</p>
+    </div>
+    <div class="diff">
+      <div class="diff-col them">
+        <p class="who">A bot inside a chat app</p>
+        <p class="who-sub">Your messages ride a platform on the way home.</p>
+        <div class="diff-row"><span class="q">WHERE MESSAGES GO</span>Phone, then the chat platform's servers, then your agent.</div>
+        <div class="diff-row"><span class="q">WHAT AN ANSWER LOOKS LIKE</span>Plain text in a bubble.</div>
+        <div class="diff-row"><span class="q">WHEN IT NEEDS PERMISSION</span>You answer in a plain text reply.</div>
+        <div class="diff-row"><span class="q">CHANGING A SCHEDULED JOB</span>Type the right slash command, syntax and all.</div>
+        <div class="diff-row"><span class="q">WHAT IT COSTS YOU</span>An account and a bot token on someone else's platform.</div>
+      </div>
+      <div class="diff-col us">
+        <p class="who">Relay</p>
+        <p class="who-sub">A direct line to your own machine.</p>
+        <div class="diff-row"><span class="q">WHERE MESSAGES GO</span>Straight from your phone to your computer. Nothing in between.</div>
+        <div class="diff-row"><span class="q">WHAT AN ANSWER LOOKS LIKE</span>Thinking you can open, code that's formatted, lists that are lists.</div>
+        <div class="diff-row"><span class="q">WHEN IT NEEDS PERMISSION</span>A card arrives. Tap Allow or Deny.</div>
+        <div class="diff-row"><span class="q">CHANGING A SCHEDULED JOB</span>An Automations screen with switches, not syntax.</div>
+        <div class="diff-row"><span class="q">WHAT IT COSTS YOU</span>Nothing. Your device, your server, that's the whole relationship.</div>
+      </div>
+    </div>
+    <p class="diff-note">Both are front doors to the same agent, and you can happily run them side by side. Relay is for when your phone deserves better than a text box.</p>
+  </div>
+</section>
+
+<section class="section">
+  <div class="wrap">
+    <div class="section-head">
+      <h2>What it feels like to use</h2>
+      <p>Not promises: the actual things the app puts on your screen.</p>
+    </div>
+
+    <div class="feature">
+      <div class="feature-copy">
+        <h3>You watch it think</h3>
+        <p>Answers stream in word by word. When the agent reasons first, the thinking sits in a little chip you can open, with how long it took and how fast it read. Nothing is hidden, nothing is noisy.</p>
+      </div>
+      <div class="feature-fig">
+        <div class="fig">
+          <span class="chip-live"><span class="pulse"></span>Thinking <b>· 14s · 23 tok/s</b></span>
+          <p class="cap">A live reply, mid-thought</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="feature">
+      <div class="feature-copy">
+        <h3>Permission is a tap, not a reply</h3>
+        <p>When your agent wants to install something, spend something, or touch something sensitive, a card comes to your phone. Approve it from the kitchen. The question waits politely if you're in another chat.</p>
+      </div>
+      <div class="feature-fig">
+        <div class="fig">
+          <div class="ask-card">
+            <div class="t">Install 2 packages?</div>
+            <div class="d">Your agent wants to add requests and rich to its Python environment.</div>
+            <div class="row"><span class="mini-btn go">Allow</span><span class="mini-btn no">Deny</span></div>
+          </div>
+          <p class="cap">An approval, as it actually arrives</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="feature">
+      <div class="feature-copy">
+        <h3>Chores it runs while you sleep</h3>
+        <p>Set a job once ("every evening at six, summarize what changed in my repo") and the agent runs it on your computer even with the app closed. Pause it, edit it, run it now: switches, not commands.</p>
+      </div>
+      <div class="feature-fig">
+        <div class="fig">
+          <div class="cron-row">
+            <div class="meta"><b>Evening repo digest</b><span>every day · 18:00</span></div>
+            <div class="toggle" role="img" aria-label="enabled"></div>
+          </div>
+          <p class="cap">One automation, on duty</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="feature">
+      <div class="feature-copy">
+        <h3>Two computers, one app</h3>
+        <p>Pair your desk and your laptop, even the same machine twice, once for home and once for the road. Relay remembers them all and reconnects to the last one on its own.</p>
+      </div>
+      <div class="feature-fig">
+        <div class="fig">
+          <div class="pair-fig">
+            <div class="pair-line"><span>Desk</span><span class="ok">CONNECTED</span></div>
+            <div class="pair-line"><span>Laptop</span><span class="ok">PAIRED</span></div>
+            <div class="pair-line"><span>Desk (Tailscale)</span><span class="ok">PAIRED</span></div>
+          </div>
+          <p class="cap">Settings, your computers list</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="feature">
+      <div class="feature-copy">
+        <h3>Every skill your agent has</h3>
+        <p>Type a slash and Relay asks your agent what it can do (commands, skills, models), straight from the source. Your agent learns a new trick tonight, your phone knows it tonight. No app update needed.</p>
+      </div>
+      <div class="feature-fig">
+        <div class="fig">
+          <div class="slash-fig">
+            <div class="c"><b>/model</b> glm-5.3-flash</div>
+            <div class="c"><b>/reasoning</b> low · medium · high</div>
+            <div class="c"><b>/cron</b> add · list · pause</div>
+          </div>
+          <p class="cap">The catalog, served by your agent</p>
+        </div>
+      </div>
     </div>
   </div>
 </section>
 
-<section id="how">
+<section class="close">
   <div class="wrap">
-    <h2 class="section-title">How it works</h2>
-    <p class="section-sub">Relay is client-only: no accounts, no cloud relay, no keys on your phone's vendor. You run the agent; the app pairs to it.</p>
-    <div class="steps">
-      <div class="card step">
-        <h3>Run your gateway</h3>
-        <p>Set up the open-source <a href="https://github.com/NousResearch/hermes-agent">Hermes agent</a> on your own machine — it holds the models, keys and sessions.</p>
-      </div>
-      <div class="card step">
-        <h3>Pair by QR</h3>
-        <p><code>scripts/hermes-pair.sh</code> prints a QR (or a <code>hermes://connect</code> link). Scan it with Relay and the computer is remembered.</p>
-      </div>
-      <div class="card step">
-        <h3>Chat from anywhere</h3>
-        <p>On LAN over <code>ws://</code>, or away from home via Tailscale/VPN with <code>wss://</code>. Approvals can reach you through push even with the app closed.</p>
-      </div>
-    </div>
+    <h2>An evening project. Yours forever.</h2>
+    <p>The setup guide walks the whole way: install the agent, put Relay on your phone, scan one code.</p>
+    <a class="btn" href="setup.html">Start the setup guide</a>
   </div>
 </section>
+
+</main>
 
 <footer>
   <div class="wrap">
-    <span>Relay — MIT license</span>
-    <span class="sep">·</span>
-    <a href="https://github.com/SoftLand-Tech/Relay">GitHub</a>
+    <span>Relay</span>
     <span class="sep">·</span>
     <a href="setup.html">Setup guide</a>
     <span class="sep">·</span>
-    <span>A companion client for the open-source <a href="https://github.com/NousResearch/hermes-agent">Hermes agent</a></span>
+    <a href="https://github.com/SoftLand-Tech/Relay">GitHub</a>
+    <span class="sep">·</span>
+    <span>A companion for the open-source <a href="https://github.com/NousResearch/hermes-agent">Hermes agent</a> · MIT</span>
   </div>
 </footer>
 
