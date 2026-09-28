@@ -173,7 +173,7 @@ const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: C.bg },
   offline: { color: C.textDim, textAlign: 'center', marginTop: 80, fontSize: 15 },
   retry: { backgroundColor: C.accent, borderRadius: 12, paddingVertical: 13, marginHorizontal: 40, marginTop: 16, alignItems: 'center', minHeight: 48, justifyContent: 'center' },
-  retryText: { color: '#FFFFFF', fontWeight: '800' },
+  retryText: { color: C.onAccent, fontWeight: '800' },
   sectionRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   section: { color: C.accent, fontSize: 11, fontWeight: '800', letterSpacing: 2, marginBottom: 10 },
   modelCard: {
@@ -189,7 +189,7 @@ const s = StyleSheet.create({
   effortPill: { paddingHorizontal: 15, paddingVertical: 11, borderRadius: 22, backgroundColor: C.inputBg, borderWidth: 1, borderColor: C.border, minHeight: 44, justifyContent: 'center' },
   effortOn: { backgroundColor: C.accent, borderColor: C.accent },
   effortText: { color: C.textDim, fontSize: 13.5, fontWeight: '600' },
-  effortTextOn: { color: '#FFFFFF', fontWeight: '800' },
+  effortTextOn: { color: C.onAccent, fontWeight: '800' },
   toggleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: C.bgCard, borderRadius: 12, borderWidth: 1, borderColor: C.border, paddingHorizontal: 14, minHeight: 56 },
   toggleLabel: { color: C.text, fontSize: 14.5, flex: 1 },
   hint: { color: C.textDim, fontSize: 12, lineHeight: 17, marginTop: 8 },

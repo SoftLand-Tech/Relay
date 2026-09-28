@@ -192,7 +192,7 @@ export default function Automations() {
         showBrand
         right={
           <Pressable style={s.addBtn} onPress={openAdd} hitSlop={8} accessibilityLabel="New automation">
-            <Ionicons name="add" size={20} color="#FFFFFF" />
+            <Ionicons name="add" size={20} color={C.onAccent} />
           </Pressable>
         }
       >
@@ -224,7 +224,7 @@ export default function Automations() {
               <Text style={s.emptyTitle}>No automations yet</Text>
               <Text style={s.emptyBody}>Tap + to schedule your first job,{'\n'}or create one from chat with /cron add</Text>
               <Pressable style={s.emptyBtn} onPress={openAdd} accessibilityLabel="New automation">
-                <Ionicons name="add" size={16} color="#FFFFFF" />
+                <Ionicons name="add" size={16} color={C.onAccent} />
                 <Text style={s.emptyBtnText}>New automation</Text>
               </Pressable>
             </View>
@@ -410,7 +410,7 @@ const s = StyleSheet.create({
   emptyTitle: { color: C.text, fontSize: 16, fontWeight: '700', marginTop: 4 },
   emptyBody: { color: C.textFaint, fontSize: 13, textAlign: 'center', lineHeight: 19 },
   emptyBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: C.accent, borderRadius: 20, paddingHorizontal: 16, height: 40, marginTop: 10 },
-  emptyBtnText: { color: '#FFFFFF', fontSize: 14, fontWeight: '700' },
+  emptyBtnText: { color: C.onAccent, fontSize: 14, fontWeight: '700' },
   addBtn: { width: 38, height: 38, borderRadius: 19, backgroundColor: C.accent, alignItems: 'center', justifyContent: 'center' },
   card: { backgroundColor: C.bgCard, borderRadius: 14, padding: 14, borderWidth: 1, borderColor: C.borderSoft },
   cardPaused: { opacity: 0.75 },

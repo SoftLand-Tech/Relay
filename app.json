@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "Hermes Pocket",
+    "name": "Relay",
     "slug": "hermes-mobile",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -64,7 +64,7 @@
       [
         "expo-notifications",
         {
-          "color": "#0E1B14",
+          "color": "#39CADB",
           "defaultChannel": "hermes-alerts"
         }
       ],

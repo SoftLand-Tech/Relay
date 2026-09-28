@@ -114,7 +114,7 @@ function SettingsInner() {
 
   const copyDiagnostics = async () => {
     const text = [
-      `Hermes Pocket v1.0`,
+      `Relay v1.0`,
       `Server: ${cfg ? redactedUrl(cfg) : '—'}`,
       `Computers saved: ${savedServers.length}`,
       `State: ${state}${err ? ` (${err.slice(0, 200)})` : ''}`,
@@ -339,7 +339,7 @@ function SettingsInner() {
         <Section title="ABOUT">
           <Row
             icon="information-circle-outline"
-            label="Hermes Pocket v1.0"
+            label="Relay v1.0"
             sub="Mobile client for your self-hosted Hermes gateway (same JSON-RPC protocol). Pair from your PC with scripts/hermes-pair.sh."
             disabled
           />
@@ -375,7 +375,7 @@ const s = StyleSheet.create({
   rowInner: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 14, paddingVertical: 10 },
   rowIcon: {
     width: 30, height: 30, borderRadius: 9,
-    backgroundColor: 'rgba(47,140,255,0.12)',
+    backgroundColor: 'rgba(57,202,219,0.12)',
     alignItems: 'center', justifyContent: 'center',
   },
   rowIconDanger: { backgroundColor: 'rgba(239,68,68,0.12)' },

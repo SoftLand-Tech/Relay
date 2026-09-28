@@ -88,7 +88,7 @@ export function PairForm({ onPaired }: { onPaired: () => void }) {
   return (
     <View>
       <Pressable style={s.scanBtn} onPress={() => void openScanner()} accessibilityRole="button" accessibilityLabel="Scan pairing QR">
-        <Ionicons name="qr-code-outline" size={22} color="#FFFFFF" />
+        <Ionicons name="qr-code-outline" size={22} color={C.onAccent} />
         <Text style={s.scanText}>Scan QR code</Text>
       </Pressable>
       <Text style={s.scanHint}>On your computer run scripts/hermes-pair.sh —{'\n'}it prints the QR to scan.</Text>
@@ -150,7 +150,7 @@ export function PairForm({ onPaired }: { onPaired: () => void }) {
               </Pressable>
             </View>
             <Pressable style={[s.btn, busy && s.btnBusy]} onPress={() => void doConnect()} disabled={busy} accessibilityLabel="Connect">
-              {busy ? <ActivityIndicator color="#FFFFFF" /> : <Text style={s.btnText}>Connect</Text>}
+              {busy ? <ActivityIndicator color={C.onAccent} /> : <Text style={s.btnText}>Connect</Text>}
             </Pressable>
           </View>
         </>
@@ -183,7 +183,7 @@ const s = StyleSheet.create({
     backgroundColor: C.accent, borderRadius: 14, paddingVertical: 16, paddingHorizontal: 18,
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, minHeight: 56,
   },
-  scanText: { color: '#FFFFFF', fontSize: 16, fontWeight: '800' },
+  scanText: { color: C.onAccent, fontSize: 16, fontWeight: '800' },
   scanHint: { color: C.textFaint, fontSize: 12.5, lineHeight: 18, textAlign: 'center', marginTop: 10 },
   moreToggle: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 14, minHeight: 44 },
   moreText: { color: C.textFaint, fontSize: 13.5, fontWeight: '600' },
@@ -200,7 +200,7 @@ const s = StyleSheet.create({
   error: { color: C.red, fontSize: 13, marginTop: 6, lineHeight: 18 },
   btn: { backgroundColor: C.accent, borderRadius: 12, paddingVertical: 15, alignItems: 'center', marginTop: 18, minHeight: 52, justifyContent: 'center' },
   btnBusy: { opacity: 0.7 },
-  btnText: { color: '#FFFFFF', fontSize: 16, fontWeight: '800' },
+  btnText: { color: C.onAccent, fontSize: 16, fontWeight: '800' },
   secondaryBtn: { backgroundColor: C.inputBg, borderRadius: 12, paddingVertical: 13, alignItems: 'center', marginTop: 12, borderWidth: 1, borderColor: C.border, minHeight: 48, justifyContent: 'center' },
   secondaryText: { color: C.text, fontSize: 14, fontWeight: '700' },
   scannerRoot: { flex: 1, backgroundColor: '#000' },

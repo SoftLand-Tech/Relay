@@ -12,10 +12,11 @@ import {
   useWindowDimensions,
 } from 'react-native'
 import type { GestureResponderEvent } from 'react-native'
-import { Ionicons } from '@expo/vector-icons'
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useStore } from '@nanostores/react'
 import { archivedIds, groupChats, pinnedIds } from '../lib/chatListState'
+import type { RowStatus } from '../lib/attention'
 import { C } from '../lib/theme'
 
 export interface NavItem {
@@ -30,9 +31,12 @@ export interface RecentChat {
   title: string
   /** Wall-clock ms of the chat's latest activity — drives the section grouping. */
   ts?: number
-  /** Unread marker — a question is waiting on this conversation. */
-  unread?: boolean
-  busy?: boolean
+  /**
+   * Live status of the conversation: `input` (yellow — the agent asked
+   * something), `done` (green — a reply landed while unwatched), `error`
+   * (red), or `busy` (cyan pulse — a turn is streaming). Undefined = idle.
+   */
+  status?: RowStatus
   active?: boolean
 }
 
@@ -309,7 +313,7 @@ export function Sidebar({
         <View style={s.header}>
           <View style={s.brandRow}>
             <Image source={require('../../assets/logo.png')} style={s.brandLogo} />
-            <Text style={s.brand}>Hermes</Text>
+            <Text style={s.brand}>Relay</Text>
           </View>
           <Pressable style={s.iconBtn} onPress={onClose} hitSlop={10} accessibilityLabel="Close menu">
             <Ionicons name="close" size={20} color={C.textDim} />
@@ -378,12 +382,11 @@ export function Sidebar({
                     style={({ pressed }) => [s.recentRow, pressed && s.recentRowPressed]}
                     accessibilityLabel={`Open ${c.title}`}
                   >
-                    {c.busy ? <View style={s.busyDot} /> : null}
                     <Text style={[s.recentTitle, c.active && s.recentTitleActive]} numberOfLines={1}>
                       {c.title}
                     </Text>
                     {isPinned ? <Ionicons name="pin" size={11} color={C.textFaint} /> : null}
-                    {c.unread ? <View style={s.unreadDot} /> : null}
+                    <StatusDot status={c.status} />
                     <Pressable
                       style={s.rowMenu}
                       hitSlop={6}
@@ -436,7 +439,7 @@ export function Sidebar({
           }}
           accessibilityLabel="New chat"
         >
-          <Ionicons name="add" size={20} color="#FFFFFF" />
+          <Ionicons name="add" size={20} color={C.onAccent} />
           <Text style={s.newChatText}>New chat</Text>
         </Pressable>
       </Animated.View>
@@ -451,7 +454,7 @@ export function Sidebar({
             style={[s.menuCard, { left: menuLeft, top: menuTop, opacity: menuAnim, transform: [{ scale: menuScale }] }]}
           >
             <MenuRow
-              icon={menuPinned ? 'pin-outline' : 'pin'}
+              icon="pin-outline"
               label={menuPinned ? 'Unpin' : 'Pin'}
               onPress={() => {
                 onPinToggle?.(shownMenu.chat.id)
@@ -467,7 +470,7 @@ export function Sidebar({
                 closeDialogs()
               }}
             />
-            <MenuRow icon="trash-outline" label="Delete" danger onPress={() => openDelete(shownMenu.chat)} />
+            <MenuRow icon="trash-can-outline" label="Delete" danger onPress={() => openDelete(shownMenu.chat)} />
           </Animated.View>
         </View>
       ) : null}
@@ -516,7 +519,7 @@ export function Sidebar({
           <Animated.View style={[s.dialogCard, { opacity: confirmAnim, transform: [{ scale: confirmScale }] }]}>
             <Text style={s.dialogTitle}>Delete this chat?</Text>
             <Text style={s.dialogBody}>
-              “{shownConfirm.title}” is permanently removed from Hermes.
+              “{shownConfirm.title}” is permanently removed from Relay.
             </Text>
             {dialogError ? <Text style={s.dialogError}>{dialogError}</Text> : null}
             <View style={s.dialogButtons}>
@@ -538,6 +541,34 @@ export function Sidebar({
   )
 }
 
+/**
+ * The status dot every chat row (sidebar + Chats screen) renders. Attention
+ * states are static and colored; `busy` pulses — it is the only transient
+ * one, and the pulse is what separates "working" from "finished, unread".
+ */
+export function StatusDot({ status }: { status?: RowStatus }) {
+  const pulse = useRef(new Animated.Value(1)).current
+  useEffect(() => {
+    if (status !== 'busy') return
+    const a = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, { toValue: 0.25, duration: 650, useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 1, duration: 650, useNativeDriver: true }),
+      ]),
+    )
+    a.start()
+    return () => a.stop()
+  }, [status, pulse])
+  if (!status) return null
+  const color = status === 'input' ? C.amber : status === 'done' ? C.greenSoft : status === 'error' ? C.red : C.accent
+  return (
+    <Animated.View
+      accessibilityLabel={status === 'input' ? 'Waiting for your input' : status === 'done' ? 'New reply' : status === 'error' ? 'Errored' : 'Working'}
+      style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: color, opacity: status === 'busy' ? pulse : 1 }}
+    />
+  )
+}
+
 /** One icon row inside the anchored chat menu. */
 function MenuRow({
   icon,
@@ -545,7 +576,7 @@ function MenuRow({
   danger,
   onPress,
 }: {
-  icon: keyof typeof Ionicons.glyphMap
+  icon: keyof typeof MaterialCommunityIcons.glyphMap
   label: string
   danger?: boolean
   onPress: () => void
@@ -556,7 +587,7 @@ function MenuRow({
       onPress={onPress}
       accessibilityLabel={label}
     >
-      <Ionicons name={icon} size={18} color={danger ? C.red : C.text} />
+      <MaterialCommunityIcons name={icon} size={18} color={danger ? C.red : C.text} />
       <Text style={[s.menuRowLabel, danger && { color: C.red }]}>{label}</Text>
     </Pressable>
   )
@@ -647,8 +678,6 @@ const s = StyleSheet.create({
   recentRowPressed: { backgroundColor: C.bgHover },
   recentTitle: { flex: 1, color: C.textDim, fontSize: 14.5, fontWeight: '400' },
   recentTitleActive: { color: C.text, fontWeight: '600' },
-  busyDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: C.greenSoft },
-  unreadDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: C.accent },
   rowMenu: {
     width: 28,
     height: 28,
@@ -667,7 +696,7 @@ const s = StyleSheet.create({
     borderRadius: 24,
     backgroundColor: C.accent,
   },
-  newChatText: { color: '#FFFFFF', fontSize: 15.5, fontWeight: '700' },
+  newChatText: { color: C.onAccent, fontSize: 15.5, fontWeight: '700' },
 
   // Anchored chat menu + dialogs — in-app overlays (Alert.alert is a no-op on
   // web). The container carries no background: each overlay fades its own
@@ -745,7 +774,7 @@ const s = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: C.accent,
   },
-  dialogBtnPrimaryText: { color: '#FFFFFF', fontSize: 14.5, fontWeight: '700' },
+  dialogBtnPrimaryText: { color: C.onAccent, fontSize: 14.5, fontWeight: '700' },
   dialogBtnDanger: {
     minHeight: 40,
     paddingHorizontal: 18,

@@ -269,7 +269,7 @@ export function ModelPickerSheet({ open, onClose }: { open: boolean; onClose: ()
                   disabled={!keyValue.trim() || savingKey}
                   accessibilityLabel="Save key"
                 >
-                  {savingKey ? <ActivityIndicator size="small" color="#FFFFFF" /> : <Text style={s.keySaveText}>Save & continue</Text>}
+                  {savingKey ? <ActivityIndicator size="small" color={C.onAccent} /> : <Text style={s.keySaveText}>Save & continue</Text>}
                 </Pressable>
               </View>
             </View>
@@ -443,7 +443,7 @@ const s = StyleSheet.create({
   keyCancelText: { color: C.textDim, fontWeight: '700', fontSize: 13.5 },
   keySave: { backgroundColor: C.accent },
   keySaveOff: { opacity: 0.5 },
-  keySaveText: { color: '#FFFFFF', fontWeight: '800', fontSize: 13.5 },
+  keySaveText: { color: C.onAccent, fontWeight: '800', fontSize: 13.5 },
   scopeWrap: { paddingHorizontal: 14, paddingBottom: 6, gap: 8 },
   scopeLead: { color: C.textDim, fontSize: 13, marginBottom: 2 },
   scopeModel: { color: C.text, fontWeight: '700' },

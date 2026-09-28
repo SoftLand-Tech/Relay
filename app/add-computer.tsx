@@ -33,6 +33,6 @@ const s = StyleSheet.create({
   content: { padding: 24, paddingBottom: 40 },
   back: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingVertical: 10, minHeight: 44 },
   backText: { color: C.text, fontSize: 15, fontWeight: '600' },
-  title: { color: '#FFFFFF', fontSize: 32, fontWeight: '800', marginBottom: 10 },
+  title: { color: C.text, fontSize: 32, fontWeight: '800', marginBottom: 10 },
   sub: { color: C.textDim, fontSize: 15, lineHeight: 21, marginBottom: 24 },
 })

@@ -14,7 +14,9 @@ import {
   pendingCount,
 } from '../../src/lib/chat'
 import { C } from '../../src/lib/theme'
+import { attentionById, rowStatus } from '../../src/lib/attention'
 import { ScreenShell } from '../../src/components/ScreenShell'
+import { StatusDot } from '../../src/components/Sidebar'
 import { loadSessions, sessionRows, sessionListLoading, sessionListError, toMs, type SessionRow } from '../../src/lib/sessionList'
 
 interface Sess {
@@ -62,6 +64,7 @@ function SessionsInner() {
   const online = useStore(isConnectedAtom)
   const currentStored = useStore(activeStoredId)
   const busy = useStore(busyStoredIds)
+  const attention = useStore(attentionById)
   const pending = useStore(pendingCount)
   const [opening, setOpening] = useState<string | null>(null)
 
@@ -114,7 +117,7 @@ function SessionsInner() {
   }, [])
 
   const removeSession = useCallback((s: Sess) => {
-    Alert.alert('Delete this conversation?', s.title || s.preview || 'This permanently removes it from Hermes.', [
+    Alert.alert('Delete this conversation?', s.title || s.preview || 'This permanently removes it from Relay.', [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Delete',
@@ -156,9 +159,9 @@ function SessionsInner() {
             accessibilityLabel="New chat"
           >
             {opening === 'new' ? (
-              <ActivityIndicator color="#FFFFFF" size="small" />
+              <ActivityIndicator color={C.onAccent} size="small" />
             ) : (
-              <Ionicons name="add" size={20} color="#FFFFFF" />
+              <Ionicons name="add" size={20} color={C.onAccent} />
             )}
           </Pressable>
         </View>
@@ -191,7 +194,7 @@ function SessionsInner() {
           // `session.list` yields stored ids; all our per-session state is
           // keyed by the same stored id, so compare in that space.
           const isCurrent = !!currentStored && currentStored === item.id
-          const isBusy = busy.includes(item.id)
+          const status = rowStatus(busy.includes(item.id), attention[item.id])
           const label = item.title || item.preview?.slice(0, 80) || 'Untitled'
           return (
             <Pressable
@@ -202,11 +205,11 @@ function SessionsInner() {
             >
               <View style={{ flex: 1 }}>
                 <View style={s.titleRow}>
-                  {isBusy ? <View style={s.busyDot} /> : null}
                   <Text style={[s.title, isCurrent && s.titleActive]} numberOfLines={1}>
                     {label}
                   </Text>
                   {isCurrent ? <Text style={s.hereTag}>open</Text> : null}
+                  <StatusDot status={status} />
                 </View>
                 <Text style={s.meta} numberOfLines={1}>
                   {item.source ? `${item.source} · ` : ''}
@@ -243,7 +246,7 @@ const s = StyleSheet.create({
   search: { flex: 1, backgroundColor: C.bgCard, borderRadius: 22, paddingHorizontal: 16, paddingVertical: 12, color: C.text, fontSize: 15, minHeight: 44 },
   newBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: C.accent, justifyContent: 'center', alignItems: 'center' },
   newBtnBusy: { opacity: 0.6 },
-  newText: { color: '#FFFFFF', fontSize: 14, fontWeight: '700' },
+  newText: { color: C.onAccent, fontSize: 14, fontWeight: '700' },
   alertRow: { paddingVertical: 10, paddingHorizontal: 14, backgroundColor: '#241A08' },
   alertText: { color: C.amber, fontSize: 13, fontWeight: '700', textAlign: 'center' },
   errRow: { padding: 12, alignItems: 'center' },
@@ -253,7 +256,6 @@ const s = StyleSheet.create({
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   title: { color: C.text, fontSize: 15, fontWeight: '600', flexShrink: 1 },
   titleActive: { color: C.accent },
-  busyDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: C.greenSoft },
   hereTag: { color: C.textFaint, fontSize: 10, fontWeight: '700', letterSpacing: 0.5, textTransform: 'uppercase' },
   meta: { color: C.textFaint, fontSize: 12, marginTop: 3 },
   empty: { color: C.textFaint, textAlign: 'center', marginTop: 60, marginBottom: 16, fontSize: 14 },

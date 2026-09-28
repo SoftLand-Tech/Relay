@@ -29,6 +29,7 @@ import {
   todos,
   outbox,
   activeTitle,
+  activeStoredId,
   sendPrompt,
   stopRun,
   steerRun,
@@ -44,6 +45,8 @@ import {
   type ToolItem,
   type ChatMessage,
 } from '../../src/lib/chat'
+import { chatTabFocused } from '../../src/lib/attention'
+import { draftFor, setDraft } from '../../src/lib/drafts'
 import { isConnected as isConnectedAtom, connectionState, gatewayError, retryNow } from '../../src/lib/gateway'
 import { completeSlash, loadCatalog, runCommand, parseSlashCommand, canonicalName, interactiveTarget, describeCommand, subsFor, argumentModeFor, type CompletionItem, type SlashOutcome } from '../../src/lib/slash'
 import { liveModel, liveReasoning } from '../../src/lib/modelState'
@@ -73,6 +76,7 @@ export default function Chat() {
   const qb = useStore(outbox)
   const title = useStore(activeTitle)
   const sid = useStore(activeSession)
+  const storedId = useStore(activeStoredId)
   const online = useStore(isConnectedAtom)
   const conn = useStore(connectionState)
   const gerr = useStore(gatewayError)
@@ -97,18 +101,37 @@ export default function Chat() {
   const recTimer = useRef<ReturnType<typeof setInterval> | null>(null)
   const slashSeq = useRef(0)
 
-  useFocusEffect(() => {
-    void clearBadge()
-  })
+  useFocusEffect(
+    useCallback(() => {
+      // Attention dispatch suppresses toasts for the chat being watched —
+      // "watched" means focused, not just mounted.
+      chatTabFocused.set(true)
+      void clearBadge()
+      return () => { chatTabFocused.set(false) }
+    }, []),
+  )
 
   // The Skills screen hands over a command to pre-fill (`/model ` etc).
   const { draft } = useLocalSearchParams<{ draft?: string }>()
   const lastDraft = useRef<string | undefined>(undefined)
+
+  // ── Per-chat composer drafts ─────────────────────────────────────────────
+  // Leaving a chat (sidebar switch, attention-toast hop, app restart) must
+  // never cost the text being typed: restore on switch, mirror every change.
+  useEffect(() => {
+    setInput(draftFor(storedId))
+  }, [storedId])
+
+  const updateInput = useCallback((t: string) => {
+    setInput(t)
+    setDraft(storedId, t)
+  }, [storedId])
+
   useEffect(() => {
     if (!draft || draft === lastDraft.current) return
     lastDraft.current = draft
-    setInput(draft)
-  }, [draft])
+    updateInput(draft)
+  }, [draft, updateInput])
 
   useEffect(() => {
     if (!online) return
@@ -167,13 +190,13 @@ export default function Chat() {
       const canonical = canonicalName(parsed.name)
       const target = interactiveTarget(canonical, parsed.args)
       if (target === 'model-picker') {
-        setInput('')
+        updateInput('')
         setSlashItems(null)
         setModelPickerOpen(true)
         return
       }
       if (target === 'options') {
-        setInput('')
+        updateInput('')
         setSlashItems(null)
         setOptionSheet({ command: canonical, allowText: argumentModeFor(canonical) === 'mixed' })
         return
@@ -186,21 +209,21 @@ export default function Chat() {
 
       if (out.action === 'send' && out.text) {
         // The gateway asked for this text to go through as a real turn.
-        setInput('')
+        updateInput('')
         setSlashItems(null)
         await sendPrompt(out.text)
         return
       }
       if (out.action === 'prefill' && out.text) {
         // Review-then-send: drop it in the composer, don't send.
-        setInput(out.text)
+        updateInput(out.text)
         setSlashItems(null)
         return
       }
       if (out.action === 'show' && out.text) {
         pushLocalMessage(out.text)
       }
-      setInput('')
+      updateInput('')
       setSlashItems(null)
     } catch (e) {
       Alert.alert('Command failed', e instanceof Error ? e.message : String(e))
@@ -211,7 +234,7 @@ export default function Chat() {
     const text = input.trim()
     if (!text) return
     if (text.startsWith('/')) {
-      setInput('')
+      updateInput('')
       await runSlash(text)
       return
     }
@@ -219,18 +242,18 @@ export default function Chat() {
     try {
       if (steerMode && busy) {
         await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
-        setInput('')
+        updateInput('')
         setSteerMode(false)
         await steerRun(text)
       } else if (busy) {
         return
       } else {
-        setInput('')
+        updateInput('')
         await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
         await sendPrompt(text)
       }
     } catch (e) {
-      setInput(text)
+      updateInput(text)
       Alert.alert('Send failed', e instanceof Error ? e.message : 'unknown')
     }
   }
@@ -261,7 +284,7 @@ export default function Chat() {
     try {
       await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
       const { transcript, provider } = await transcribeRecording(uri)
-      setInput(transcript)
+      updateInput(transcript)
       if (provider) Alert.alert(`Transcribed (${provider})`, 'Review and send.')
     } catch (e) {
       Alert.alert('Transcription failed', e instanceof Error ? e.message : 'unknown')
@@ -348,7 +371,7 @@ export default function Chat() {
   return (
     <SafeAreaView style={s.safe} edges={['bottom']}>
       <ScreenShell
-        title={title || 'Hermes'}
+        title={title || 'Relay'}
         onSearch={() => router.push('/(tabs)/sessions')}
         right={
           curModel ? (
@@ -401,8 +424,8 @@ export default function Chat() {
                     key={st.label}
                     style={({ pressed }) => [s.starter, pressed && s.starterPressed]}
                     onPress={() => {
-                      if (st.label === 'Browse slash commands') setInput('/')
-                      else setInput(st.label)
+                      if (st.label === 'Browse slash commands') updateInput('/')
+                      else updateInput(st.label)
                     }}
                     accessibilityLabel={st.label}
                   >
@@ -461,7 +484,7 @@ export default function Chat() {
                       key={`${it.kind ?? 'c'}-${insertable}-${i}`}
                       style={({ pressed }) => [s.slashRow, pressed && s.slashRowPressed]}
                       onPress={() => {
-                        setInput(insertable)
+                        updateInput(insertable)
                         setSlashItems(null)
                       }}
                       accessibilityLabel={`${label}, ${isSkill ? 'skill' : 'command'}`}
@@ -516,7 +539,7 @@ export default function Chat() {
                       }}
                       accessibilityLabel={c}
                     >
-                      <Text style={s.sheetBtnText}>
+                      <Text style={[s.sheetBtnText, !deny && { color: C.onAccent }]}>
                         {c === 'once' ? 'Allow' : c === 'session' ? 'Always this chat' : c === 'always' ? 'Always' : 'Deny'}
                       </Text>
                     </Pressable>
@@ -543,7 +566,7 @@ export default function Chat() {
                           style={[s.clarifyBtn, batchAnswers[q.qid] === o && s.clarifyOn]}
                           onPress={() => setBatchAnswers((a) => ({ ...a, [q.qid]: o }))}
                         >
-                          <Text style={s.clarifyText}>{o}</Text>
+                          <Text style={[s.clarifyText, batchAnswers[q.qid] === o && { color: C.onAccent }]}>{o}</Text>
                         </Pressable>
                       ))}
                       {!q.choices?.length ? (
@@ -559,7 +582,7 @@ export default function Chat() {
                     </View>
                   ))}
                   <Pressable style={[s.sheetBtn, { backgroundColor: C.accent }]} onPress={() => { void respondClarifyBatch(batchAnswers) }}>
-                    <Text style={s.sheetBtnText}>Send</Text>
+                    <Text style={[s.sheetBtnText, { color: C.onAccent }]}>Send</Text>
                   </Pressable>
                 </>
               ) : (
@@ -584,7 +607,7 @@ export default function Chat() {
                       onPress={() => { const t = answerText; setAnswerText(''); void respondClarify(t) }}
                       accessibilityLabel="Send clarification"
                     >
-                      <Ionicons name="arrow-up" size={17} color="#FFFFFF" />
+                      <Ionicons name="arrow-up" size={17} color={C.onAccent} />
                     </Pressable>
                   </View>
                 </>
@@ -614,7 +637,7 @@ export default function Chat() {
               />
               <View style={[s.sheetRow, { marginTop: 10 }]}>
                 <Pressable style={[s.sheetBtn, { backgroundColor: C.accent }]} onPress={() => { const v = secretValue; setSecretValue(''); void respondPrivileged(true, v || undefined) }}>
-                  <Text style={s.sheetBtnText}>Send</Text>
+                  <Text style={[s.sheetBtnText, { color: C.onAccent }]}>Send</Text>
                 </Pressable>
                 <Pressable style={[s.sheetBtn, s.denyBtn]} onPress={() => { setSecretValue(''); void respondPrivileged(false) }}>
                   <Text style={[s.sheetBtnText, { color: C.red }]}>Deny</Text>
@@ -638,7 +661,7 @@ export default function Chat() {
               <TextInput
                 style={s.input}
                 value={input}
-                onChangeText={setInput}
+                onChangeText={updateInput}
                 placeholder={
                   isSlashMode ? 'Filter commands…' : steerMode && busy ? 'Steer the running task…' : busy ? 'Working…' : 'Ask Hermes'
                 }
@@ -657,7 +680,7 @@ export default function Chat() {
                   hitSlop={8}
                   accessibilityLabel="Stop"
                 >
-                  <Ionicons name="stop" size={17} color="#FFFFFF" />
+                  <Ionicons name="stop" size={17} color={C.onAccent} />
                 </Pressable>
               ) : (
                 <Pressable
@@ -685,20 +708,20 @@ export default function Chat() {
                 <Ionicons
                   name={isSlashMode ? 'return-down-back' : steerMode && busy ? 'bulb' : 'arrow-up'}
                   size={18}
-                  color={canSend ? '#FFFFFF' : C.textFaint}
+                  color={canSend ? C.onAccent : C.textFaint}
                 />
               </Pressable>
             </View>
 
             {busy ? (
               <Pressable
-                style={s.steerChip}
+                style={[s.steerChip, steerMode && s.steerChipOn]}
                 onPress={() => setSteerMode(!steerMode)}
                 accessibilityRole="button"
                 accessibilityLabel={steerMode ? 'Steer mode on' : 'Steer mode'}
               >
-                <Ionicons name="git-branch-outline" size={12} color={steerMode ? '#0B0B0B' : C.textDim} />
-                <Text style={[s.steerText, steerMode && { color: '#0B0B0B' }]}>Steer</Text>
+                <Ionicons name="git-branch-outline" size={12} color={steerMode ? C.onAccent : C.textDim} />
+                <Text style={[s.steerText, steerMode && { color: C.onAccent }]}>Steer</Text>
               </Pressable>
             ) : null}
           </View>
@@ -827,5 +850,6 @@ const s = StyleSheet.create({
     borderRadius: 13,
     backgroundColor: C.bgCard,
   },
+  steerChipOn: { backgroundColor: C.accent },
   steerText: { color: C.textDim, fontSize: 11.5, fontWeight: '700' },
 })

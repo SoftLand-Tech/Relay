@@ -30,7 +30,7 @@ export default function Onboarding() {
     <SafeAreaView style={s.safe} edges={['top', 'bottom']}>
       <ScrollView style={s.root} contentContainerStyle={s.content} keyboardShouldPersistTaps="handled">
         <Text style={s.kicker}>SELF-HOSTED AGENT</Text>
-        <Text style={s.title}>Hermes{'\n'}Pocket</Text>
+        <Text style={s.title}>Relay</Text>
         <Text style={s.sub}>Your agent, in your pocket.</Text>
 
         <PairForm onPaired={() => router.replace('/(tabs)/chat')} />
@@ -71,7 +71,7 @@ const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: C.bg },
   content: { padding: 24, paddingBottom: 40 },
   kicker: { color: C.accent, fontSize: 11, fontWeight: '700', letterSpacing: 2.5, marginBottom: 10, marginTop: 20 },
-  title: { color: '#FFFFFF', fontSize: 46, fontWeight: '800', lineHeight: 52, marginBottom: 10 },
+  title: { color: C.text, fontSize: 46, fontWeight: '800', lineHeight: 52, marginBottom: 10 },
   sub: { color: C.textDim, fontSize: 15, marginBottom: 26, lineHeight: 21 },
   savedBlock: { marginTop: 18 },
   label: { color: C.textFaint, fontSize: 10.5, fontWeight: '700', letterSpacing: 2, marginBottom: 8 },

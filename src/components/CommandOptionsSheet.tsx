@@ -141,7 +141,7 @@ export function CommandOptionsSheet({
                   disabled={!custom.trim()}
                   accessibilityLabel={`Run ${command}`}
                 >
-                  <Ionicons name="arrow-up" size={16} color="#FFFFFF" />
+                  <Ionicons name="arrow-up" size={16} color={C.onAccent} />
                 </Pressable>
               </View>
             ) : null}

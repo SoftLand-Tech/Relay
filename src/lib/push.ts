@@ -195,23 +195,51 @@ export async function clearBadge() {
   await setBadge(0)
 }
 
-/** Replay the notification the user tapped, so the root layout can route. */
-export async function lastNotificationResponse(): Promise<unknown> {
+/** What a notification tap wants opened. `storedId` targets a specific chat. */
+export interface NotificationTarget {
+  storedId?: string
+}
+
+/** Pull the deep-link target out of a NotificationResponse. */
+function targetOf(response: unknown): NotificationTarget {
+  try {
+    const data = (response as { notification?: { request?: { content?: { data?: unknown } } } })
+      ?.notification?.request?.content?.data
+    const storedId = (data as Record<string, unknown> | null | undefined)?.storedId
+    return { storedId: typeof storedId === 'string' ? storedId : undefined }
+  } catch {
+    return {}
+  }
+}
+
+/** Replay the notification the user tapped (covers killed-state launch), so
+ *  the root layout can route. Null when no tap is pending. */
+export async function lastNotificationResponse(): Promise<NotificationTarget | null> {
   const n = N()
   if (!n) return null
   try {
-    return await n.getLastNotificationResponseAsync()
+    const r = await n.getLastNotificationResponseAsync()
+    return r ? targetOf(r) : null
   } catch {
     return null
   }
 }
 
+/** Forget the replayed tap so the next normal launch doesn't re-route to it. */
+export async function clearLastNotificationResponse(): Promise<void> {
+  const n = N()
+  if (!n) return
+  try {
+    await n.clearLastNotificationResponseAsync()
+  } catch {}
+}
+
 /** Subscribe to notification taps. Returns a remover, or null if unavailable. */
-export function onNotificationResponse(handler: () => void): (() => void) | null {
+export function onNotificationResponse(handler: (target: NotificationTarget) => void): (() => void) | null {
   const n = N()
   if (!n) return null
   try {
-    const sub = n.addNotificationResponseReceivedListener(handler)
+    const sub = n.addNotificationResponseReceivedListener((response) => handler(targetOf(response)))
     return () => {
       try {
         sub.remove()
@@ -269,7 +297,7 @@ export async function sendTestNotification(): Promise<void> {
   const ok = await ensureNotificationPermission()
   if (!ok) throw new Error('Notification permission denied.')
   await n.scheduleNotificationAsync({
-    content: { title: 'Hermes Pocket', body: 'Notifications are working — approvals will buzz here.', data: { screen: 'chat' } },
+    content: { title: 'Relay', body: 'Notifications are working — approvals will buzz here.', data: { screen: 'chat' } },
     trigger: null,
   })
 }

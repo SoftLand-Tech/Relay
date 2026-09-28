@@ -4,16 +4,25 @@ import { StatusBar } from 'expo-status-bar'
 import { View, ActivityIndicator, Text, Pressable, StyleSheet, AppState, Modal } from 'react-native'
 import { useStore } from '@nanostores/react'
 import * as Linking from 'expo-linking'
-import { initPush, lastNotificationResponse, onNotificationResponse } from '../src/lib/push'
+import * as SplashScreen from 'expo-splash-screen'
+import { initPush, lastNotificationResponse, onNotificationResponse, clearLastNotificationResponse, type NotificationTarget } from '../src/lib/push'
+import { AnimatedSplash } from '../src/components/AnimatedSplash'
+import { SessionToasts } from '../src/components/SessionToasts'
 import {
   isConnected as isConnectedAtom, connectionState, connConfig, loadSavedConfig,
   connect, gatewayError, retryNow, disconnect, reconnectAttempt, onForeground, redactedUrl,
   servers as serversStore, activeServerId, refreshServers, switchToServer,
   forgetActiveServer, mostRecentServer, type SavedServer,
 } from '../src/lib/gateway'
-import { hookChatEvents, loadOutbox } from '../src/lib/chat'
+import { hookChatEvents, loadOutbox, switchToSession } from '../src/lib/chat'
+import { loadAttention, pendingOpenStoredId, requestOpenSession } from '../src/lib/attention'
+import { loadDrafts } from '../src/lib/drafts'
 import { parseConnectUrl } from '../src/lib/pairing'
 import { C } from '../src/lib/theme'
+
+// Keep the native splash up until the animated overlay is committed on top
+// of the app — global scope, un-awaited, per the SDK 57 docs.
+SplashScreen.preventAutoHideAsync().catch(() => {})
 
 export default function RootLayout() {
   const state = useStore(connectionState)
@@ -25,6 +34,11 @@ export default function RootLayout() {
   const [showServers, setShowServers] = useState(false)
   const savedServers = useStore(serversStore)
   const activeId = useStore(activeServerId)
+  const pendingOpen = useStore(pendingOpenStoredId)
+  const [splashGone, setSplashGone] = useState(false)
+  // Rendered as the stable last sibling of both layout branches, so the
+  // branch switch (saved config loading in) never remounts it mid-animation.
+  const splash = !splashGone ? <AnimatedSplash onDone={() => setSplashGone(true)} /> : null
 
   const forgetAndFallBack = async () => {
     disconnect()
@@ -37,8 +51,16 @@ export default function RootLayout() {
   }
 
   useEffect(() => {
+    // First commit has the overlay (a pixel-match of the native splash) on
+    // top — safe to drop the native one now. iOS gets the fade; web no-ops.
+    try {
+      SplashScreen.setOptions({ fade: true, duration: 300 })
+      SplashScreen.hide()
+    } catch {}
     hookChatEvents()
     void loadOutbox()
+    void loadDrafts()
+    void loadAttention()
     void initPush()
     void refreshServers()
     let cancelled = false
@@ -66,16 +88,20 @@ export default function RootLayout() {
       if (s === 'active') onForeground()
     })
 
-    // Notification tap → chat (covers killed-state launch too).
-    // Routed through push.ts so expo-notifications is never in this file's
-    // static import graph — see the note in push.ts.
-    const goChat = () => {
-      try { router.push('/(tabs)/chat') } catch {}
+    // Notification tap → the chat it is about (covers killed-state launch
+    // too). Routed through push.ts so expo-notifications is never in this
+    // file's static import graph — see the note in push.ts.
+    const openFromNotification = (t: NotificationTarget) => {
+      try { router.navigate('/(tabs)/chat') } catch {}
+      if (t.storedId) requestOpenSession(t.storedId)
     }
     void lastNotificationResponse().then((r) => {
-      if (!cancelled && r) goChat()
+      if (cancelled || !r) return
+      openFromNotification(r)
+      // Consume the replayed tap so the next normal launch doesn't re-route.
+      void clearLastNotificationResponse()
     })
-    const removeNotifSub = onNotificationResponse(goChat)
+    const removeNotifSub = onNotificationResponse(openFromNotification)
 
     return () => {
       cancelled = true
@@ -85,8 +111,21 @@ export default function RootLayout() {
     }
   }, [])
 
+  // Consume a deep-link target (toast tap / notification tap) once the
+  // gateway is connected — switching needs a live RPC. Stale targets (the
+  // connection never came up within a minute) are dropped so an old tap
+  // can't yank the user out of a chat much later.
+  useEffect(() => {
+    if (!pendingOpen || !online) return
+    pendingOpenStoredId.set(null)
+    if (Date.now() - pendingOpen.at > 60_000) return
+    try { router.navigate('/(tabs)/chat') } catch {}
+    void switchToSession(pendingOpen.storedId).catch(() => {})
+  }, [pendingOpen, online, router])
+
   if (!cfg) {
     return (
+      <>
       <View style={{ flex: 1, backgroundColor: C.bg }}>
         <StatusBar style="light" />
         <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: C.bg } }} />
@@ -94,6 +133,8 @@ export default function RootLayout() {
           <View style={s.toast}><Text style={s.toastText}>{linkMsg}</Text></View>
         ) : null}
       </View>
+      {splash}
+      </>
     )
   }
 
@@ -101,6 +142,7 @@ export default function RootLayout() {
   const connecting = !online && state === 'connecting'
 
   return (
+    <>
     <View style={{ flex: 1, backgroundColor: C.bg }}>
       <StatusBar style="light" />
       <Stack
@@ -183,17 +225,23 @@ export default function RootLayout() {
           </View>
         </View>
       </Modal>
+
+      {/* Attention toasts — above every screen, under nothing but the
+          (transient) splash. Tapping one deep-links to its chat. */}
+      <SessionToasts />
     </View>
+    {splash}
+    </>
   )
 }
 
 const s = StyleSheet.create({
   overlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.94)', alignItems: 'center', justifyContent: 'center', padding: 30 },
-  errTitle: { color: '#E5735F', fontSize: 19, fontWeight: '800', marginBottom: 12 },
+  errTitle: { color: C.red, fontSize: 19, fontWeight: '800', marginBottom: 12 },
   errDetail: { color: C.textDim, fontSize: 13, textAlign: 'center', marginBottom: 24, lineHeight: 19 },
   btnRow: { flexDirection: 'row', gap: 12 },
   btn: { backgroundColor: C.accent, borderRadius: 12, paddingVertical: 14, paddingHorizontal: 28 },
-  btnText: { color: '#FFFFFF', fontSize: 15, fontWeight: '800' },
+  btnText: { color: C.onAccent, fontSize: 15, fontWeight: '800' },
   ghostBtn: { borderRadius: 12, paddingVertical: 14, paddingHorizontal: 22, borderWidth: 1, borderColor: C.border, marginTop: 12 },
   ghostText: { color: C.textDim, fontSize: 15, fontWeight: '600' },
   connecting: { color: C.textDim, marginTop: 14, marginBottom: 8 },

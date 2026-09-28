@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useStore } from '@nanostores/react'
 import { Sidebar, type NavItem, type RecentChat } from './Sidebar'
 import { C } from '../lib/theme'
+import { attentionById, rowStatus } from '../lib/attention'
 import { isConnected as isConnectedAtom, rpc } from '../lib/gateway'
 import {
   activeStoredId,
@@ -47,6 +48,7 @@ export function ScreenShell({
 
   const pending = useStore(pendingStoredIds)
   const busy = useStore(busyStoredIds)
+  const attention = useStore(attentionById)
   const current = useStore(activeStoredId)
   const all = useStore(sessionsById)
   const rows = useStore(sessionRows)
@@ -88,12 +90,12 @@ export function ScreenShell({
     // conversation, and `started_at` is a real timestamp. Falling back to the
     // in-memory store (for a chat created before the first fetch landed) is
     // ordered by creation time, never by the per-session `lastSeq`.
+    const statusOf = (id: string) => rowStatus(busy.includes(id), attention[id])
     const fromServer = rows.map((r) => ({
       id: r.id,
       title: r.title || r.preview?.slice(0, 60) || 'Untitled',
       ts: toMs(r.started_at),
-      unread: pending.includes(r.id),
-      busy: busy.includes(r.id),
+      status: statusOf(r.id),
       active: r.id === current,
     }))
 
@@ -105,15 +107,14 @@ export function ScreenShell({
         id: s.storedId,
         title: s.title || 'New chat',
         ts: s.createdAtMs ?? 0,
-        unread: pending.includes(s.storedId),
-        busy: busy.includes(s.storedId),
+        status: statusOf(s.storedId),
         active: s.storedId === current,
       }))
 
     // Uncapped: the sidebar's own search filters this list, and server rows
     // are bounded by the session.list fetch anyway.
     return [...locals, ...fromServer]
-  }, [rows, all, pending, busy, current])
+  }, [rows, all, busy, attention, current])
 
   const go = useCallback(
     (key: string) => {
@@ -215,7 +216,7 @@ export function ScreenShell({
         </Pressable>
 
         <View style={s.titleWrap}>
-          {showBrand ? <Text style={s.brand}>Hermes</Text> : null}
+          {showBrand ? <Text style={s.brand}>Relay</Text> : null}
           <Text style={[s.title, showBrand && s.titleDim]} numberOfLines={1}>
             {title}
           </Text>

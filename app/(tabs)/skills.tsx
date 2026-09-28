@@ -137,7 +137,7 @@ const s = StyleSheet.create({
   tab: { paddingHorizontal: 14, height: 34, borderRadius: 17, backgroundColor: C.bgCard, alignItems: 'center', justifyContent: 'center' },
   tabOn: { backgroundColor: C.accent },
   tabText: { color: C.textDim, fontSize: 13, fontWeight: '600' },
-  tabTextOn: { color: '#FFFFFF' },
+  tabTextOn: { color: C.onAccent },
   row: { paddingHorizontal: 10, paddingVertical: 11, borderRadius: 10, minHeight: 48, justifyContent: 'center' },
   rowPressed: { backgroundColor: C.bgCard },
   rowName: { color: C.text, fontSize: 15, fontWeight: '600' },

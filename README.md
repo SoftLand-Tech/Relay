@@ -1,6 +1,8 @@
-# Hermes Pocket
+# Relay
 
-**Hermes Pocket** is an open-source Expo (React Native) mobile client for a self-hosted Hermes agent gateway. It puts the agent that runs on your own computer in your pocket: streamed replies with live reasoning blocks, tool activity, approvals and questions you can answer from your phone, scheduled automations, voice in/out through your gateway's providers, and multi-computer pairing — all talking to *your* server over the same JSON-RPC protocol the desktop app uses. The gateway holds the keys and the sessions; the phone is just a very convenient window onto them.
+**Website:** <https://softland-tech.github.io/Relay>
+
+**Relay** is an open-source Expo (React Native) mobile client for a self-hosted Hermes agent gateway. It puts the agent that runs on your own computer in your pocket: streamed replies with live reasoning blocks, tool activity, approvals and questions you can answer from your phone, scheduled automations, voice in/out through your gateway's providers, and multi-computer pairing — all talking to *your* server over the same JSON-RPC protocol the desktop app uses. The gateway holds the keys and the sessions; the phone is just a very convenient window onto them.
 
 ## Screenshots
 
@@ -64,7 +66,7 @@ Everything below is what the client actually implements — nothing is hardcoded
 
 ### The gateway
 
-Hermes Pocket is **client-only**: it has no built-in agent, models, or API keys. It speaks the gateway's JSON-RPC v7 protocol over WebSocket (`ws(s)://<your-gateway-host>:<port>/api/ws`) plus the dashboard REST audio endpoints.
+Relay is **client-only**: it has no built-in agent, models, or API keys. It speaks the gateway's JSON-RPC v7 protocol over WebSocket (`ws(s)://<your-gateway-host>:<port>/api/ws`) plus the dashboard REST audio endpoints.
 
 The gateway is a separate self-hosted component that this repository does not ship. To get a server, set up Hermes yourself following the upstream project's README: <https://github.com/NousResearch/hermes-agent>. This README stays client-side — run the gateway on your own machine however that project documents, then come back here and pair this app with it. (The client's `src/protocol/` layer is a port of that project's shared client sources; the generated wire contract it implements is `apps/shared/src/gateway-contract.generated.ts` in the gateway repo.)
 
@@ -117,7 +119,7 @@ Pairing needs three things: the **host** (`<gateway-host>:<gateway-port>`), the 
 
 ### 2. Scan it with the phone
 
-Open Hermes Pocket → **Scan QR code**. No camera, or pairing a link from elsewhere? **More options** folds out a paste-field for the `hermes://connect?…` link and a manual host + token + TLS form. On a development or production build, `hermes://connect` links tapped on the phone pair directly.
+Open Relay → **Scan QR code**. No camera, or pairing a link from elsewhere? **More options** folds out a paste-field for the `hermes://connect?…` link and a manual host + token + TLS form. On a development or production build, `hermes://connect` links tapped on the phone pair directly.
 
 The token lands in SecureStore (AsyncStorage fallback where SecureStore is unavailable, e.g. web), and the paired computer is remembered.
 
@@ -219,7 +221,7 @@ scripts/
   - Param contracts are `extra="forbid"`: an unknown key is rejected with `4000`. `session.list` has no `search` param; filter locally.
   - `session.list` returns durable **stored** ids while RPCs and events are keyed by **live** ids; the client keeps a live↔stored map and bridges them.
   - The generated wire contract is the source of truth: `apps/shared/src/gateway-contract.generated.ts` in the [gateway repo](https://github.com/NousResearch/hermes-agent). Ground protocol changes there, not in guesses.
-- **Styling:** dark theme, single source of colors in `src/lib/theme.ts`.
+- **Styling:** dark theme, single source of colors in `src/lib/theme.ts`. The palette is extracted from the logo: the brand cyan `#39CADB` is the accent, the canvas derives from the icon's dark teal `#0E181B`, and every neutral shares that hue band.
 
 ## Contributing
 

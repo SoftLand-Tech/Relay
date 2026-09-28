@@ -1,28 +1,33 @@
 /**
  * Design tokens.
  *
- * Palette follows the ChatGPT dark theme: true black canvas, near-black
- * elevated surfaces, one blue accent reserved for primary actions. The token
- * names are kept stable so every screen picks up the new palette without
- * touching its own styles.
+ * Palette extracted from the logo assets: the mark is brand cyan #39CADB
+ * (hue 186°, >50% of logo.png's opaque pixels) on dark teal #0E181B (93% of
+ * icon.png). The canvas and elevated surfaces derive from that teal, the logo
+ * cyan is the single accent reserved for primary actions, and every neutral
+ * (text grays, borders, bubbles) is hue-locked to the same 186–194° band.
+ * Anything sitting on the accent uses `onAccent` — dark ink — because white
+ * fails contrast on this lightness of cyan. The token names are kept stable
+ * so every screen picks up the palette without touching its own styles.
  */
 export const C = {
-  // Surfaces
-  bg: '#000000',
-  bgCard: '#1C1C1C',
-  bgElev: '#212121',
-  bgHover: '#2C2C2C',
-  inputBg: '#212121',
+  // Surfaces — hue-matched to the logo cyan, kept near-black.
+  bg: '#060D0F',
+  bgCard: '#121B1D',
+  bgElev: '#162022',
+  bgHover: '#233134',
+  inputBg: '#162022',
   scrim: 'rgba(0,0,0,0.55)',
 
   // Text
   text: '#FFFFFF',
-  textDim: '#B4B4B4',
-  textFaint: '#8C8C8C',
+  textDim: '#AEBDBF',
+  textFaint: '#829396',
 
-  // Accent — reserved for primary actions only (send, new chat, active nav).
-  accent: '#2F8CFF',
-  accentDark: '#1B6ED1',
+  // Accent — the Relay logo cyan. `onAccent` is the ink that sits on it.
+  accent: '#39CADB',
+  accentDark: '#2795A3',
+  onAccent: '#052529',
 
   // Status
   green: '#10A37F',
@@ -30,11 +35,11 @@ export const C = {
   red: '#FF5A5A',
   amber: '#F5A524',
 
-  border: '#2F2F2F',
-  borderSoft: '#232323',
+  border: '#26383A',
+  borderSoft: '#1A2628',
 
   // Messages — the assistant is unboxed, the user sits in a soft bubble.
-  userBubble: '#2A2A2A',
+  userBubble: '#1F2C2F',
   assistantBubble: 'transparent',
 }
 

@@ -6,6 +6,8 @@ import { log } from './log'
 import { notifyLocal, setBadge } from './push'
 import { bindLiveId, upsertOptimisticRow, patchRowTitle } from './sessionList'
 import { hookModelState, noteSessionInfo } from './modelState'
+import { markAttention, clearAttention, pushToast, chatTabFocused, type AttentionKind } from './attention'
+import { clearDraft } from './drafts'
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -535,6 +537,8 @@ export async function resumeSession(storedId: string): Promise<ResumeResult> {
     [id]: existing ? { ...existing, storedId: newStored, detached: false } : makeSession(id, newStored),
   })
   activeSession.set(id)
+  // Opening a chat is "seeing it" — retire its attention badge.
+  clearAttention(newStored)
   await AsyncStorage.setItem(LAST_SESSION_KEY, newStored)
   if (res.messages?.length) applyHistory(id, res.messages)
   else await loadCachedTranscript(id)
@@ -597,6 +601,7 @@ export async function switchToSession(storedId: string): Promise<string> {
 
 /** Forget a session locally (backend delete is the caller's job). */
 export async function forgetSession(liveId: string) {
+  const stored = sessionsById.get()[liveId]?.storedId
   const map = { ...sessionsById.get() }
   delete map[liveId]
   sessionsById.set(map)
@@ -604,6 +609,10 @@ export async function forgetSession(liveId: string) {
   delete pend[liveId]
   pendingBySession.set(pend)
   delete storedIdMap[liveId]
+  if (stored) {
+    clearAttention(stored)
+    clearDraft(stored)
+  }
   try {
     await AsyncStorage.setItem(STORED_ID_MAP_KEY, JSON.stringify(storedIdMap))
   } catch {
@@ -647,16 +656,23 @@ export function applyHistory(sessionId: string, list?: Array<Record<string, unkn
 
 // ── Sending ────────────────────────────────────────────────────────────────
 
+// Back-compat flag mirrored from the per-session locks; terminal events reset
+// it as a stuck-send safety net.
 let sending = false
+// One in-flight submit per chat: a send to chat B while chat A's ack is still
+// pending must not be queued behind (or delivered to) A.
+const sendingSessions = new Set<string>()
 
 export async function sendPrompt(rawText: string) {
   const text = rawText.trim().slice(0, 8000)
   if (!text) return
   flushStreams()
-  if (sending) {
+  const lockKey = activeSession.get() ?? '_boot'
+  if (sendingSessions.has(lockKey)) {
     enqueueOffline(text)
     return
   }
+  sendingSessions.add(lockKey)
   sending = true
 
   let sid = ''
@@ -675,30 +691,39 @@ export async function sendPrompt(rawText: string) {
       throw err
     }
 
-    patchActive({
-      messages: [...messages.get(), { id: nid(), role: 'user', text, ts: Date.now() }],
-      tools: [],
-      busy: true,
-    })
+    // Patch THIS session: a fast chat switch mid-send must not graft the user
+    // bubble onto whichever conversation is active by the time this runs.
+    const s = sessionsById.get()[sid]
+    if (s) {
+      patchSession(sid, {
+        messages: [...s.messages, { id: nid(), role: 'user', text, ts: Date.now() }],
+        tools: [],
+        busy: true,
+      })
+    }
+    // The user is here and acting — drop any stale badge on this chat.
+    clearAttentionLive(sid)
     void persistSession(sid)
     await rpc('prompt.submit', { session_id: sid, text })
   } catch (err) {
-    patchActive({ busy: false })
-    sending = false
-    const sid2 = sid || activeSession.get()
-    if (sid2) {
-      const list = [...messages.get()]
+    if (sid) {
+      const s2 = sessionsById.get()[sid]
+      if (s2) patchSession(sid, { busy: false })
+      const list = [...(s2?.messages ?? [])]
       const idx = [...list].reverse().findIndex((m) => m.role === 'user' && m.text === text)
       if (idx >= 0) {
         const real = list.length - 1 - idx
         list[real] = { ...list[real], status: 'failed', error: err instanceof Error ? err.message : 'Send failed' }
-        patchSession(sid2, { messages: list })
+        patchSession(sid, { messages: list })
       }
+    } else {
+      patchActive({ busy: false })
     }
     throw err
+  } finally {
+    sendingSessions.delete(lockKey)
+    sending = sendingSessions.size > 0
   }
-  sending = false
-  // `busy` stays true until message.complete / status.update / error.
 }
 
 export async function retryMessage(id: string) {
@@ -749,10 +774,14 @@ function answer(id: string, result: Record<string, unknown>) {
   getClient()?.respondServerRequest(id, result)
 }
 
-/** Retire a answered/cancelled question from the queue for its session. */
+/** Retire an answered/cancelled question from the queue for its session. */
 function retire(req: PendingRequest) {
   withPending(req.sessionId, (list) => list.filter((r) => r.id !== req.id))
   refreshBadge()
+  // The last question resolved → the turn resumes (or ends); the yellow
+  // "waiting on you" marker has done its job. While questions remain queued
+  // the session is still blocked, so keep it.
+  if (!(pendingBySession.get()[req.sessionId]?.length)) clearAttentionLive(req.sessionId)
 }
 
 export async function respondApproval(choice: 'once' | 'session' | 'always' | 'deny', all = false) {
@@ -821,9 +850,14 @@ function onServerRequestMessage(req: {
         replayed: req.replayed,
       }
       withPending(sessionId, (list) => [...list, item])
-      if (isBackgrounded()) {
-        void notifyLocal('Approval needed', item.command ?? item.description ?? 'The agent wants to run a command.', { screen: 'chat' })
-      }
+      flagAttention(
+        sessionId,
+        'input',
+        { title: 'Approval needed', body: item.command ?? item.description ?? 'The agent wants to run a command.' },
+        // Replayed questions (reconnect/resume) re-mark the row but don't
+        // re-notify — the user already heard about this one.
+        { suppress: item.replayed },
+      )
       return true
     }
 
@@ -845,9 +879,12 @@ function onServerRequestMessage(req: {
         replayed: req.replayed,
       }
       withPending(sessionId, (list) => [...list, item])
-      if (isBackgrounded()) {
-        void notifyLocal('Agent asks', item.question ?? 'Clarification needed', { screen: 'chat' })
-      }
+      flagAttention(
+        sessionId,
+        'input',
+        { title: 'Agent asks', body: item.question ?? 'Clarification needed' },
+        { suppress: item.replayed },
+      )
       return true
     }
 
@@ -866,9 +903,12 @@ function onServerRequestMessage(req: {
         replayed: req.replayed,
       }
       withPending(sessionId, (list) => [...list, item])
-      if (isBackgrounded()) {
-        void notifyLocal(req.method === 'sudo' ? 'Sudo requested' : 'Secret requested', item.prompt ?? '', { screen: 'chat' })
-      }
+      flagAttention(
+        sessionId,
+        'input',
+        { title: req.method === 'sudo' ? 'Sudo requested' : 'Secret requested', body: item.prompt ?? '' },
+        { suppress: item.replayed },
+      )
       return true
     }
 
@@ -893,10 +933,10 @@ function upsertToolIn(sessionId: string, t: ToolItem) {
   patchSession(sessionId, { tools: list.slice(-MAX_TOOLS) })
 }
 
-/** True when the chat screen is currently showing this session's events. */
+/** True when the chat tab is showing this session's events right now. */
 function isShowing(sessionId?: string): boolean {
   if (!sessionId) return false
-  return sessionId === activeSession.get()
+  return sessionId === activeSession.get() && chatTabFocused.get()
 }
 
 /** True when the user can't see the chat (background/inactive). */
@@ -905,6 +945,42 @@ function isBackgrounded(): boolean {
     return AppState.currentState !== 'active'
   } catch {
     return false
+  }
+}
+
+function clearAttentionLive(liveId: string) {
+  const stored = sessionsById.get()[liveId]?.storedId
+  if (stored) clearAttention(stored)
+}
+
+/**
+ * Record an attention state for a session and surface it where the user will
+ * see it: an in-app toast when the app is foregrounded, a local push
+ * notification when it isn't. Both deep-link to the chat. No-ops when the
+ * user is already watching that chat (they saw it happen live), except that
+ * `input`/`error` still mark the row — leaving without answering should show
+ * yellow, an error they watched stays red until reopened.
+ */
+function flagAttention(
+  liveId: string,
+  kind: AttentionKind,
+  notify: { title: string; body: string },
+  opts?: { suppress?: boolean },
+) {
+  const s = sessionsById.get()[liveId]
+  if (!s?.storedId) return
+  if (kind === 'done' && isShowing(liveId)) {
+    // The user watched the turn land — nothing to draw attention to.
+    clearAttention(s.storedId)
+  } else {
+    markAttention(s.storedId, kind)
+  }
+  if (opts?.suppress || isShowing(liveId)) return
+  const body = notify.body.replace(/\s+/g, ' ').trim().slice(0, 180)
+  if (isBackgrounded()) {
+    void notifyLocal(notify.title, body, { screen: 'chat', storedId: s.storedId, kind })
+  } else {
+    pushToast({ kind, title: notify.title, body, storedId: s.storedId, chatTitle: s.title })
   }
 }
 
@@ -1013,6 +1089,9 @@ export function hookChatEvents() {
 
       case 'message.start': {
         flushStreams()
+        // A new turn is in flight — any prior attention marker (green "done",
+        // red "error") is stale; the busy pulse takes over until it lands.
+        clearAttentionLive(eSid)
         // Re-read: flushStreams just replaced the messages array; the `s`
         // captured at handler top is stale by one flush.
         const cur = sessionsById.get()[eSid]
@@ -1068,10 +1147,16 @@ export function hookChatEvents() {
         })
         sending = false
         void persistSession(eSid)
+        const failed = p.status === 'error' || !!p.error
         const finalText = text || list[list.length - 1]?.text || ''
-        if (isBackgrounded() && finalText.trim()) {
-          void notifyLocal('Agent replied', finalText.trim().slice(0, 180), { screen: 'chat' })
-        }
+        flagAttention(
+          eSid,
+          failed ? 'error' : 'done',
+          {
+            title: failed ? 'Turn failed' : 'Agent replied',
+            body: failed ? String(p.error ?? p.failure_reason ?? 'Turn failed') : finalText,
+          },
+        )
         break
       }
 
@@ -1127,6 +1212,7 @@ export function hookChatEvents() {
         if (list.some((r) => r.id === rid)) {
           log('info', 'chat', `question withdrawn (${String(p.reason ?? 'unknown')})`)
           withPending(eSid, (l) => l.filter((r) => r.id !== rid))
+          if (!(pendingBySession.get()[eSid]?.length)) clearAttentionLive(eSid)
         }
         break
       }
@@ -1136,9 +1222,11 @@ export function hookChatEvents() {
         patchSession(eSid, { busy: false })
         sending = false
         log('info', 'chat', `background complete: ${JSON.stringify(p).slice(0, 200)}`)
-        if (isBackgrounded()) {
-          void notifyLocal('Background task done', String(p.text ?? JSON.stringify(p)).slice(0, 180), { screen: 'chat' })
-        }
+        flagAttention(
+          eSid,
+          'done',
+          { title: 'Background task done', body: String(p.text ?? JSON.stringify(p)) },
+        )
         break
       }
 
@@ -1166,6 +1254,7 @@ export function hookChatEvents() {
         patchSession(eSid, { messages: list, busy: false })
         sending = false
         void persistSession(eSid)
+        flagAttention(eSid, 'error', { title: 'Turn failed', body: msg })
         break
       }
 
