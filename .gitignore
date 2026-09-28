@@ -43,3 +43,6 @@ yarn-error.*
 
 # local agent tooling state
 .video_agent/
+
+# promo video working files
+videos/

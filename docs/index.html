@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Relay — your agent, in your pocket</title>
+  <meta name="description" content="Relay is the open-source mobile client for a self-hosted Hermes agent gateway: streaming chat with live reasoning, approvals from your phone, automations, and multi-computer pairing." />
+  <link rel="icon" href="assets/favicon.png" />
+  <link rel="stylesheet" href="relay.css" />
+</head>
+<body>
+
+<nav class="nav">
+  <div class="nav-inner">
+    <a class="nav-logo" href="./">
+      <img src="assets/logo.png" alt="Relay" />
+    </a>
+    <div class="nav-links">
+      <a class="nav-text" href="#features">Features</a>
+      <a class="nav-text" href="#screenshots">Screenshots</a>
+      <a class="nav-text" href="setup.html">Setup</a>
+      <a class="btn" href="https://github.com/SoftLand-Tech/Relay">GitHub</a>
+    </div>
+  </div>
+</nav>
+
+<header class="hero">
+  <div class="wrap hero-grid">
+    <div>
+      <p class="kicker">SELF-HOSTED AGENT</p>
+      <h1>Your agent,<br />in your pocket.</h1>
+      <p class="lede">
+        Relay is an open-source Expo (React Native) client for a
+        <strong>self-hosted Hermes agent gateway</strong>. Streamed replies with live
+        reasoning, approvals you can answer from your phone, scheduled automations —
+        all talking to <em>your</em> server. The gateway holds the keys; Relay is the window.
+      </p>
+      <div class="hero-cta">
+        <a class="btn" href="setup.html">Get started</a>
+        <a class="btn ghost" href="https://github.com/SoftLand-Tech/Relay">View on GitHub</a>
+      </div>
+      <div class="hero-badges">
+        <span class="chip">MIT license</span>
+        <span class="chip">Expo SDK 57</span>
+        <span class="chip">iOS · Android · Web</span>
+        <span class="chip">No cloud, no accounts</span>
+      </div>
+    </div>
+    <div class="phone">
+      <img src="screenshots/03-streaming.png" alt="Relay streaming a reply with a live Thinking block" width="264" />
+    </div>
+  </div>
+</header>
+
+<section id="features">
+  <div class="wrap">
+    <h2 class="section-title">Everything the gateway can do, from your phone</h2>
+    <p class="section-sub">
+      Nothing is hardcoded against a particular server — inventories of commands,
+      skills and models are fetched from your gateway at runtime.
+    </p>
+    <div class="grid">
+      <div class="card">
+        <h3><span class="ico">⚡</span>Streaming + thinking</h3>
+        <p>Answers stream token-by-token; reasoning arrives as collapsible <em>Thinking</em> blocks with elapsed time and ~tok/s. Markdown renders on completion, with copy and listen on every reply.</p>
+      </div>
+      <div class="card">
+        <h3><span class="ico">✅</span>Answer from anywhere</h3>
+        <p>Approvals, clarifications, sudo and secret requests arrive as interactive cards over the same socket — answer them from the grocery store, not just the desk.</p>
+      </div>
+      <div class="card">
+        <h3><span class="ico">💬</span>Multi-session sidebar</h3>
+        <p>Every conversation is an independent session. Search across all chats, pin / rename / archive / delete, grouped into Today, Yesterday and older.</p>
+      </div>
+      <div class="card">
+        <h3><span class="ico">🔗</span>Multi-computer pairing</h3>
+        <p>Pair your desk and your laptop: every gateway is remembered, Relay reconnects to the last one on launch, and tokens live in the device keystore — never in git.</p>
+      </div>
+      <div class="card">
+        <h3><span class="ico">⌘</span>Slash commands &amp; skills</h3>
+        <p>Typing <code>/</code> drives off the gateway's own command registry, so new server-side commands and skills appear without an app update.</p>
+      </div>
+      <div class="card">
+        <h3><span class="ico">⏰</span>Automations</h3>
+        <p>Create, edit, pause and run cron jobs — <code>every 30m</code>, <code>in 45m</code>, <code>every monday 9:00</code>. Jobs run on the gateway, so they fire even when the app is closed.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="screenshots">
+  <div class="wrap">
+    <h2 class="section-title">The real app</h2>
+    <p class="section-sub">Captured from the web build at phone size, connected to a live gateway.</p>
+    <div class="shots">
+      <a href="screenshots/01-pairing.png"><figure><img src="screenshots/01-pairing.png" alt="Pairing screen" loading="lazy" /><figcaption>Pairing</figcaption></figure></a>
+      <a href="screenshots/03-streaming.png"><figure><img src="screenshots/03-streaming.png" alt="Streaming reply with Thinking block" loading="lazy" /><figcaption>Streaming + thinking</figcaption></figure></a>
+      <a href="screenshots/04-reply.png"><figure><img src="screenshots/04-reply.png" alt="Finished reply rendered as Markdown" loading="lazy" /><figcaption>Rendered reply</figcaption></figure></a>
+      <a href="screenshots/05-sidebar.png"><figure><img src="screenshots/05-sidebar.png" alt="Sidebar with grouped chat list" loading="lazy" /><figcaption>Sidebar &amp; chat list</figcaption></figure></a>
+      <a href="screenshots/07-models.png"><figure><img src="screenshots/07-models.png" alt="Models and reasoning effort" loading="lazy" /><figcaption>Models &amp; reasoning</figcaption></figure></a>
+      <a href="screenshots/08-automations.png"><figure><img src="screenshots/08-automations.png" alt="Automations" loading="lazy" /><figcaption>Automations</figcaption></figure></a>
+      <a href="screenshots/09-skills.png"><figure><img src="screenshots/09-skills.png" alt="Commands and skills" loading="lazy" /><figcaption>Commands &amp; skills</figcaption></figure></a>
+      <a href="screenshots/10-settings.png"><figure><img src="screenshots/10-settings.png" alt="Settings with remembered computers" loading="lazy" /><figcaption>Settings</figcaption></figure></a>
+      <a href="screenshots/02-chat.png"><figure><img src="screenshots/02-chat.png" alt="New chat" loading="lazy" /><figcaption>New chat</figcaption></figure></a>
+    </div>
+  </div>
+</section>
+
+<section id="how">
+  <div class="wrap">
+    <h2 class="section-title">How it works</h2>
+    <p class="section-sub">Relay is client-only: no accounts, no cloud relay, no keys on your phone's vendor. You run the agent; the app pairs to it.</p>
+    <div class="steps">
+      <div class="card step">
+        <h3>Run your gateway</h3>
+        <p>Set up the open-source <a href="https://github.com/NousResearch/hermes-agent">Hermes agent</a> on your own machine — it holds the models, keys and sessions.</p>
+      </div>
+      <div class="card step">
+        <h3>Pair by QR</h3>
+        <p><code>scripts/hermes-pair.sh</code> prints a QR (or a <code>hermes://connect</code> link). Scan it with Relay and the computer is remembered.</p>
+      </div>
+      <div class="card step">
+        <h3>Chat from anywhere</h3>
+        <p>On LAN over <code>ws://</code>, or away from home via Tailscale/VPN with <code>wss://</code>. Approvals can reach you through push even with the app closed.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <span>Relay — MIT license</span>
+    <span class="sep">·</span>
+    <a href="https://github.com/SoftLand-Tech/Relay">GitHub</a>
+    <span class="sep">·</span>
+    <a href="setup.html">Setup guide</a>
+    <span class="sep">·</span>
+    <span>A companion client for the open-source <a href="https://github.com/NousResearch/hermes-agent">Hermes agent</a></span>
+  </div>
+</footer>
+
+</body>
+</html>

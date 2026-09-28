@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Setup — Relay</title>
+  <meta name="description" content="Get Relay running: install, start the dev server, pair it with your self-hosted Hermes gateway, and reach it from anywhere." />
+  <link rel="icon" href="assets/favicon.png" />
+  <link rel="stylesheet" href="relay.css" />
+</head>
+<body>
+
+<nav class="nav">
+  <div class="nav-inner">
+    <a class="nav-logo" href="./">
+      <img src="assets/logo.png" alt="Relay" />
+    </a>
+    <div class="nav-links">
+      <a class="nav-text" href="index.html">Home</a>
+      <a class="nav-text" href="index.html#screenshots">Screenshots</a>
+      <a class="btn" href="https://github.com/SoftLand-Tech/Relay">GitHub</a>
+    </div>
+  </div>
+</nav>
+
+<section style="border-top: none;">
+  <div class="wrap prose">
+    <h2>Setup guide</h2>
+    <p>
+      Relay is client-only — before the app can chat, you need a
+      <strong>self-hosted Hermes gateway</strong> you control (your own computer, a VPS,
+      anything that stays on). Set one up with the
+      <a href="https://github.com/NousResearch/hermes-agent">upstream Hermes project</a>,
+      then come back here.
+    </p>
+
+    <h2>1 · Install and run</h2>
+    <pre><code>git clone https://github.com/SoftLand-Tech/Relay.git
+cd Relay
+npm install
+
+npx expo start
+# press w (web), a (Android), i (iOS) — or scan with Expo Go</code></pre>
+    <p>
+      Requirements: <strong>Node 22.x</strong> and npm. The project tracks
+      <strong>Expo SDK 57</strong> — if you plan to change code, read the
+      <a href="https://docs.expo.dev/versions/v57.0.0/">versioned SDK 57 docs</a> first;
+      the SDK has changed substantially from earlier versions.
+    </p>
+    <div class="note">
+      Without a gateway the app stops at the pairing screen — there is no demo mode.
+      To exercise just the protocol layer offline, the repo ships node-runnable suites:
+      <code>npm run test</code>, <code>npm run test:slash</code>.
+    </div>
+
+    <h2>2 · Pair with your gateway</h2>
+    <p>
+      On the machine running the gateway, print a QR (or a pairing link):
+    </p>
+    <pre><code>./scripts/hermes-pair.sh --host &lt;gateway-host&gt; --port &lt;gateway-port&gt; --token &lt;token&gt;
+# add --tls for wss (tailnet / public host)</code></pre>
+    <ul>
+      <li>The token is the gateway's <strong>dashboard session token</strong>; the script reads it from <code>HERMES_DASHBOARD_SESSION_TOKEN</code> and prompts if missing.</li>
+      <li>Point your phone at the QR in Relay's onboarding — or paste the <code>hermes://connect?…</code> link via <em>More options</em>.</li>
+      <li>The token is stored in the device keystore (SecureStore, with a web fallback), and the computer is remembered for one-tap reconnect.</li>
+    </ul>
+
+    <h2>3 · Reach it away from home</h2>
+    <ul>
+      <li><strong>Same network:</strong> pair with the machine's LAN address over plain <code>ws://</code>.</li>
+      <li><strong>Anywhere:</strong> install <a href="https://tailscale.com">Tailscale</a> (or your VPN of choice) on both machines and pair with the tailnet hostname + <code>--tls</code>. Works over mobile data, no port forwarding.</li>
+      <li>Pair the <em>same</em> machine twice — LAN and VPN — and switch between both entries from Settings → <em>Computers</em>.</li>
+    </ul>
+
+    <h2>4 · Optional: push for approvals</h2>
+    <p>
+      Local alerts work out of the box while the socket is alive. For notifications
+      with the app closed, build with <a href="https://docs.expo.dev/eas/">EAS</a>
+      (<code>npx eas build</code>), grab a push token in Settings, and run the repo's
+      watcher on the gateway machine:
+    </p>
+    <pre><code>./scripts/hermes-push-watch.sh \
+  --host 127.0.0.1:&lt;gateway-port&gt; \
+  --token &lt;token&gt; \
+  --push-token 'ExponentPushToken[xxxx]'</code></pre>
+
+    <h2>Going deeper</h2>
+    <p>
+      The <a href="https://github.com/SoftLand-Tech/Relay#readme">README</a> has the
+      full manual: the gateway contract (JSON-RPC v7 over WebSocket), every npm
+      script, Expo Go vs development builds, and the protocol gotchas the code
+      encodes deliberately.
+    </p>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <span>Relay — MIT license</span>
+    <span class="sep">·</span>
+    <a href="index.html">Home</a>
+    <span class="sep">·</span>
+    <a href="https://github.com/SoftLand-Tech/Relay">GitHub</a>
+  </div>
+</footer>
+
+</body>
+</html>
