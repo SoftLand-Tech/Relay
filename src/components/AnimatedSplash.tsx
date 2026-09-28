@@ -9,7 +9,7 @@
  * Reduced-motion users skip straight through.
  */
 import React, { useEffect, useRef, useState } from 'react'
-import { AccessibilityInfo, Animated, Easing, StyleSheet } from 'react-native'
+import { AccessibilityInfo, Animated, Easing, Pressable, StyleSheet } from 'react-native'
 import { C } from '../lib/theme'
 
 /** Same width as the native splash `imageWidth`, so frame one matches it. */
@@ -24,6 +24,8 @@ export function AnimatedSplash({ onDone }: { onDone: () => void }) {
   const exitScale = useRef(new Animated.Value(1)).current
   const ripple1 = useRef(new Animated.Value(0)).current
   const ripple2 = useRef(new Animated.Value(0)).current
+  const intro = useRef<Animated.CompositeAnimation | null>(null)
+  const skipped = useRef(false)
 
   useEffect(() => {
     let live = true
@@ -33,9 +35,25 @@ export function AnimatedSplash({ onDone }: { onDone: () => void }) {
     return () => { live = false }
   }, [])
 
+  /** Exit: the brand moment passes through into the app. */
+  const exit = (duration: number) => {
+    Animated.parallel([
+      Animated.timing(fade, { toValue: 0, duration, easing: Easing.in(Easing.quad), useNativeDriver: true }),
+      Animated.timing(exitScale, { toValue: 1.06, duration, easing: Easing.in(Easing.quad), useNativeDriver: true }),
+    ]).start(({ finished }) => { if (finished) onDone() })
+  }
+
+  /** Tap-to-skip: cut the ripples short and start the exit fade now. */
+  const skip = () => {
+    if (skipped.current) return
+    skipped.current = true
+    intro.current?.stop()
+    exit(250)
+  }
+
   useEffect(() => {
     if (reduced) { onDone(); return }
-    const anim = Animated.sequence([
+    intro.current = Animated.sequence([
       Animated.parallel([
         // settle: the logo eases from the static splash pose into place
         Animated.timing(settle, { toValue: 1, duration: 550, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
@@ -43,14 +61,9 @@ export function AnimatedSplash({ onDone }: { onDone: () => void }) {
         Animated.sequence([Animated.delay(220), Animated.timing(ripple2, { toValue: 1, duration: 950, easing: Easing.out(Easing.cubic), useNativeDriver: true })]),
       ]),
       Animated.delay(120),
-      // exit: the brand moment passes through into the app
-      Animated.parallel([
-        Animated.timing(fade, { toValue: 0, duration: 400, easing: Easing.in(Easing.quad), useNativeDriver: true }),
-        Animated.timing(exitScale, { toValue: 1.06, duration: 400, easing: Easing.in(Easing.quad), useNativeDriver: true }),
-      ]),
     ])
-    anim.start(({ finished }) => { if (finished) onDone() })
-    return () => anim.stop()
+    intro.current.start(({ finished }) => { if (finished) exit(400) })
+    return () => { intro.current?.stop() }
     // onDone is a setState wrapper from the root layout — stable in practice.
   }, [reduced])
 
@@ -66,6 +79,13 @@ export function AnimatedSplash({ onDone }: { onDone: () => void }) {
 
   return (
     <Animated.View style={[s.overlay, { opacity: fade }]} accessibilityLabel="Loading Relay">
+      {/* Tap anywhere to skip — plain Views/Images above don't intercept. */}
+      <Pressable
+        style={StyleSheet.absoluteFill}
+        onPress={skip}
+        accessibilityLabel="Skip intro"
+        accessibilityRole="button"
+      />
       <Animated.View style={[s.ripple, rippleStyle(ripple1)]} />
       <Animated.View style={[s.ripple, rippleStyle(ripple2)]} />
       <Animated.Image

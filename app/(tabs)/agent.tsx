@@ -5,7 +5,7 @@ import { useStore } from '@nanostores/react'
 import { Ionicons } from '@expo/vector-icons'
 import { rpc, isConnected as isConnectedAtom, retryNow } from '../../src/lib/gateway'
 import { activeSession, ensureSession } from '../../src/lib/chat'
-import { liveModel, liveProvider, fetchModelOptions } from '../../src/lib/modelState'
+import { liveModel, liveProvider, fetchModelOptions, liveReasoningDisplay } from '../../src/lib/modelState'
 import { log } from '../../src/lib/log'
 import { C } from '../../src/lib/theme'
 import { ScreenShell } from '../../src/components/ScreenShell'
@@ -19,7 +19,7 @@ export default function Controls() {
   const model = useStore(liveModel)
   const provider = useStore(liveProvider)
   const [effort, setEffort] = useState<string>('')
-  const [showReasoning, setShowReasoning] = useState(true)
+  const showReasoning = useStore(liveReasoningDisplay)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState<string | null>(null)
   const [pickerOpen, setPickerOpen] = useState(false)
@@ -31,7 +31,7 @@ export default function Controls() {
       // is NOT a valid key (4002). The right one is `reasoning`.
       const r = await rpc<{ value?: string; display?: string }>('config.get', { key: 'reasoning', ...(sid ? { session_id: sid } : {}) })
       if (r?.value) setEffort(String(r.value))
-      if (r?.display) setShowReasoning(r.display !== 'hide')
+      if (r?.display) liveReasoningDisplay.set(r.display === 'hide' ? 'hide' : 'show')
     } catch (err) {
       log('warn', 'agent', `config.get reasoning failed: ${String(err)}`)
     }
@@ -73,14 +73,15 @@ export default function Controls() {
   }
 
   const toggleReasoning = async (next: boolean) => {
-    const prev = showReasoning
-    setShowReasoning(next)
+    // Optimistic: the chat screen renders from the same atom, so hiding
+    // takes effect the moment the switch flips — no round-trip wait.
+    const prev = liveReasoningDisplay.get()
+    liveReasoningDisplay.set(next ? 'show' : 'hide')
     try {
       // `config.set reasoning show|hide` is the documented toggle verb.
       await rpc('config.set', { key: 'reasoning', value: next ? 'show' : 'hide', ...(sid ? { session_id: sid } : {}) })
-      await refresh()
     } catch (e) {
-      setShowReasoning(prev)
+      liveReasoningDisplay.set(prev)
       Alert.alert('Failed to save', e instanceof Error ? e.message : '')
     }
   }
@@ -88,7 +89,7 @@ export default function Controls() {
   const body = !online ? (
     <View style={s.root}>
       <Text style={s.offline}>Not connected</Text>
-      <Pressable style={s.retry} onPress={() => { void retryNow().catch(() => {}) }}>
+      <Pressable style={({ pressed }) => [s.retry, pressed && s.pressed]} onPress={() => { void retryNow().catch(() => {}) }}>
         <Text style={s.retryText}>Reconnect</Text>
       </Pressable>
     </View>
@@ -100,7 +101,7 @@ export default function Controls() {
           {loading ? <ActivityIndicator color={C.accent} size="small" /> : null}
         </View>
         <Pressable
-          style={s.modelCard}
+          style={({ pressed }) => [s.modelCard, pressed && s.pressed]}
           onPress={() => setPickerOpen(true)}
           accessibilityLabel={`Current model ${model || 'default'}. Tap to change`}
         >
@@ -130,7 +131,7 @@ export default function Controls() {
           {EFFORTS.map((e) => (
             <Pressable
               key={e}
-              style={[s.effortPill, effort === e && s.effortOn]}
+              style={({ pressed }) => [s.effortPill, effort === e && s.effortOn, pressed && s.pressed]}
               onPress={() => void setAndSave(e)}
               accessibilityLabel={`Reasoning effort ${e}`}
               accessibilityState={{ selected: effort === e }}
@@ -148,7 +149,7 @@ export default function Controls() {
         <View style={s.toggleRow}>
           <Text style={s.toggleLabel}>Show thinking in the chat</Text>
           <Switch
-            value={showReasoning}
+            value={showReasoning === 'show'}
             onValueChange={(v) => void toggleReasoning(v)}
             trackColor={{ true: C.accent, false: C.border }}
             accessibilityLabel="Show reasoning"
@@ -171,6 +172,7 @@ export default function Controls() {
 const s = StyleSheet.create({
   frame: { flex: 1, backgroundColor: C.bg },
   root: { flex: 1, backgroundColor: C.bg },
+  pressed: { opacity: 0.6 },
   offline: { color: C.textDim, textAlign: 'center', marginTop: 80, fontSize: 15 },
   retry: { backgroundColor: C.accent, borderRadius: 12, paddingVertical: 13, marginHorizontal: 40, marginTop: 16, alignItems: 'center', minHeight: 48, justifyContent: 'center' },
   retryText: { color: C.onAccent, fontWeight: '800' },

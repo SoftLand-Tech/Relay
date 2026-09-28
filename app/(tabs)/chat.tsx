@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   View,
   Text,
@@ -11,6 +11,8 @@ import {
   Alert,
   ActivityIndicator,
   ScrollView,
+  type NativeSyntheticEvent,
+  type NativeScrollEvent,
 } from 'react-native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useStore } from '@nanostores/react'
@@ -30,6 +32,8 @@ import {
   outbox,
   activeTitle,
   activeStoredId,
+  activeSession,
+  sessionLoadings,
   sendPrompt,
   stopRun,
   steerRun,
@@ -38,20 +42,25 @@ import {
   respondClarifyBatch,
   respondPrivileged,
   ensureSession,
-  activeSession,
+  activeLiveId,
+  chatBanner,
+  activeQueue,
   retryMessage,
   flushOutbox,
+  newChat,
   pushLocalMessage,
   type ToolItem,
   type ChatMessage,
 } from '../../src/lib/chat'
+import { enqueueSend, removeQueued } from '../../src/lib/sendQueue'
 import { chatTabFocused } from '../../src/lib/attention'
 import { draftFor, setDraft } from '../../src/lib/drafts'
 import { isConnected as isConnectedAtom, connectionState, gatewayError, retryNow } from '../../src/lib/gateway'
-import { completeSlash, loadCatalog, runCommand, parseSlashCommand, canonicalName, interactiveTarget, describeCommand, subsFor, argumentModeFor, type CompletionItem, type SlashOutcome } from '../../src/lib/slash'
-import { liveModel, liveReasoning } from '../../src/lib/modelState'
+import { completeSlash, loadCatalog, runCommand, parseSlashCommand, canonicalName, interactiveTarget, describeCommand, subsFor, argumentModeFor, slashLabel, localCompleteSync, type CompletionItem, type SlashOutcome } from '../../src/lib/slash'
+import { liveModel, liveReasoning, liveReasoningDisplay, fetchReasoningDisplay } from '../../src/lib/modelState'
 import { ModelPickerSheet } from '../../src/components/ModelPickerSheet'
 import { CommandOptionsSheet } from '../../src/components/CommandOptionsSheet'
+import { CommandCatalogSheet } from '../../src/components/CommandCatalogSheet'
 import { MessageBubble, ToolRow } from '../../src/components/Chat'
 import { ScreenShell } from '../../src/components/ScreenShell'
 import { C } from '../../src/lib/theme'
@@ -75,22 +84,33 @@ export default function Chat() {
   const td = useStore(todos)
   const qb = useStore(outbox)
   const title = useStore(activeTitle)
-  const sid = useStore(activeSession)
   const storedId = useStore(activeStoredId)
+  const loadings = useStore(sessionLoadings)
+  // This chat's content is still on its way (optimistic placeholder waiting
+  // on the cached transcript / session.resume) — never render the starters.
+  const booting = !!(storedId && loadings[storedId]) && msgs.length === 0
+  const banner = useStore(chatBanner)
   const online = useStore(isConnectedAtom)
   const conn = useStore(connectionState)
   const gerr = useStore(gatewayError)
   const curModel = useStore(liveModel)
   const curEffort = useStore(liveReasoning)
+  const showThinking = useStore(liveReasoningDisplay) !== 'hide'
+  // Live id — only used to scope the reasoning-display config read; the
+  // screen itself keys off storedId.
+  const sid = useStore(activeSession)
   const [input, setInput] = useState('')
   const [steerMode, setSteerMode] = useState(false)
+  const queued = useStore(activeQueue)
   const [answerText, setAnswerText] = useState('')
   const [secretValue, setSecretValue] = useState('')
   const [batchAnswers, setBatchAnswers] = useState<Record<string, string>>({})
   const [stick, setStick] = useState(true)
   const [showScrollBtn, setShowScrollBtn] = useState(false)
+  const [toolsOpen, setToolsOpen] = useState(false)
   const [slashItems, setSlashItems] = useState<CompletionItem[] | null>(null)
   const [modelPickerOpen, setModelPickerOpen] = useState(false)
+  const [catalogOpen, setCatalogOpen] = useState(false)
   const [optionSheet, setOptionSheet] = useState<{ command: string; allowText: boolean } | null>(null)
   const listRef = useRef<FlatList>(null)
   const insets = useSafeAreaInsets()
@@ -118,8 +138,15 @@ export default function Chat() {
   // ── Per-chat composer drafts ─────────────────────────────────────────────
   // Leaving a chat (sidebar switch, attention-toast hop, app restart) must
   // never cost the text being typed: restore on switch, mirror every change.
+  // The swap also resets the reading position: scroll state must not carry
+  // over from the previous chat (stale offset, stray jump FAB, wrong
+  // bottom-follow). scrollMetrics is a ref declared below — safe to touch
+  // here because the effect body runs after the render completes.
   useEffect(() => {
     setInput(draftFor(storedId))
+    setStick(true)
+    setShowScrollBtn(false)
+    scrollMetrics.current = { y: 0, contentH: 0, viewH: 0 }
   }, [storedId])
 
   const updateInput = useCallback((t: string) => {
@@ -146,6 +173,15 @@ export default function Chat() {
     })()
   }, [online])
 
+  // Mirror the gateway's reasoning-display config so the chat renderer honors
+  // the "Show thinking in the chat" toggle (Agent tab) even when the user
+  // never visits that tab this run. Re-reads on session switch — the config
+  // is session-scoped, and a different chat may hide thinking.
+  useEffect(() => {
+    if (!online || !sid) return
+    void fetchReasoningDisplay(sid)
+  }, [online, sid])
+
   useEffect(() => {
     if (!stick) return
     // One frame of defer so the freshly grown content has laid out before we
@@ -157,6 +193,46 @@ export default function Chat() {
     return () => clearTimeout(t)
   }, [msgs.length, msgs[msgs.length - 1]?.text, msgs[msgs.length - 1]?.segments?.length, tls.length, stick, busy])
 
+  // ── Bottom-of-list tracking ─────────────────────────────────────────────
+  // One reading of "is the user parked at the bottom" drives both
+  // follow-streaming (`stick`) and the jump-to-latest button. It is
+  // re-checked on drag/momentum end because throttled in-flight events can
+  // leave the last reading short of the true resting offset — that was the
+  // "I'm at the bottom but the button still shows" bug — and on
+  // content-size/layout changes, since a new message landing while scrolled
+  // up fires no scroll event at all (that was the "button never shows" bug).
+  const scrollMetrics = useRef({ y: 0, contentH: 0, viewH: 0 })
+  // While a programmatic jump-to-bottom is in flight, content-size changes
+  // are our own doing — evaluating "is the user at the bottom" mid-jump
+  // would see the not-yet-scrolled offset and cancel the follow.
+  const stickUntil = useRef(0)
+  const evalBottom = useCallback(() => {
+    const { y, contentH, viewH } = scrollMetrics.current
+    if (!viewH) return
+    if (Date.now() < stickUntil.current) return
+    // Overscroll (rubber-band past the end) makes the raw distance negative;
+    // clamping keeps "scrolled too far" counting as at-bottom.
+    const distance = Math.max(0, contentH - viewH - y)
+    const nearBottom = distance < 120
+    setStick(nearBottom)
+    setShowScrollBtn(!nearBottom)
+  }, [])
+  const readScroll = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const { layoutMeasurement, contentOffset, contentSize } = e.nativeEvent
+    scrollMetrics.current = { y: contentOffset.y, contentH: contentSize.height, viewH: layoutMeasurement.height }
+    evalBottom()
+  }, [evalBottom])
+
+  /** Force the view to the newest message — every send dispatch and the
+   *  jump-to-latest button. Sending while scrolled up must never leave the
+   *  user's own message off-screen. */
+  const jumpToLatest = useCallback(() => {
+    stickUntil.current = Date.now() + 800
+    setStick(true)
+    setShowScrollBtn(false)
+    listRef.current?.scrollToEnd?.({ animated: true })
+  }, [])
+
   // ── Slash palette ──────────────────────────────────────────────────────
   const slashQuery = input.startsWith('/') ? input.split('\n')[0] : null
 
@@ -166,16 +242,23 @@ export default function Chat() {
       return
     }
     const seq = ++slashSeq.current
+    // Instant paint from the locally loaded registry — no debounce, no RPC
+    // wait. The debounced gateway call below only refines the ranking; when
+    // it fails, the local paint survives instead of collapsing the palette.
+    setSlashItems(localCompleteSync(slashQuery).slice(0, MAX_SLASH_ITEMS))
     const t = setTimeout(async () => {
       try {
-        const items = await completeSlash(slashQuery, sid ?? undefined)
+        // Resolve the optimistic switch/create windows to a real live id so
+        // the completion RPC never sees a `pending:` placeholder key.
+        const live = await activeLiveId().catch(() => null)
+        const items = await completeSlash(slashQuery, live ?? undefined)
         if (seq === slashSeq.current) setSlashItems(items.slice(0, MAX_SLASH_ITEMS))
       } catch {
-        if (seq === slashSeq.current) setSlashItems(null)
+        // Keep the local paint.
       }
     }, 120)
     return () => clearTimeout(t)
-  }, [slashQuery, sid])
+  }, [slashQuery, storedId])
 
   const runSlash = async (text: string) => {
     const trimmed = text.trim()
@@ -188,11 +271,30 @@ export default function Chat() {
     const parsed = parseSlashCommand(trimmed)
     if (parsed && !parsed.args) {
       const canonical = canonicalName(parsed.name)
+      // Bare /new starts a fresh app-side chat exactly like the sidebar
+      // button: the gateway's own reply ("New session started!") only resets
+      // its server-side session and would print a card in the current chat
+      // without switching anything.
+      if (canonical === 'new') {
+        updateInput('')
+        setSlashItems(null)
+        void newChat().catch((e) => Alert.alert('New chat failed', e instanceof Error ? e.message : String(e)))
+        return
+      }
       const target = interactiveTarget(canonical, parsed.args)
       if (target === 'model-picker') {
         updateInput('')
         setSlashItems(null)
         setModelPickerOpen(true)
+        return
+      }
+      // Bare /help // /commands open the command browser instead of the
+      // gateway's dump; the sheet self-loads the registry (spinner) when it
+      // has not landed yet, so this works on an unloaded session too.
+      if (target === 'catalog') {
+        updateInput('')
+        setSlashItems(null)
+        setCatalogOpen(true)
         return
       }
       if (target === 'options') {
@@ -204,13 +306,17 @@ export default function Chat() {
     }
 
     try {
-      const s = sid ?? (await ensureSession())
+      // activeLiveId resolves the optimistic windows (new-chat create,
+      // detached switch placeholder) to a REAL live id — a `pending:` key
+      // must never reach the gateway.
+      const s = await activeLiveId()
       const out: SlashOutcome = await runCommand(trimmed, s)
 
       if (out.action === 'send' && out.text) {
         // The gateway asked for this text to go through as a real turn.
         updateInput('')
         setSlashItems(null)
+        jumpToLatest()
         await sendPrompt(out.text)
         return
       }
@@ -221,7 +327,14 @@ export default function Chat() {
         return
       }
       if (out.action === 'show' && out.text) {
-        pushLocalMessage(out.text)
+        // Command outputs render as the card family; the label is normalized
+        // here once (slashLabel covers both name conventions out of slash.ts).
+        pushLocalMessage(out.text, 'assistant', {
+          name: slashLabel(out.name),
+          variant: out.subtype,
+          suggestion: out.suggestion,
+          hint: out.hint,
+        })
       }
       updateInput('')
       setSlashItems(null)
@@ -233,25 +346,45 @@ export default function Chat() {
   const send = async () => {
     const text = input.trim()
     if (!text) return
+    // Whatever this dispatch turns into (turn, steer, queued message), the
+    // user's eye belongs at the newest message.
+    jumpToLatest()
     if (text.startsWith('/')) {
       updateInput('')
       await runSlash(text)
       return
     }
-    if (busy && !steerMode) return
-    try {
-      if (steerMode && busy) {
-        await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
-        updateInput('')
-        setSteerMode(false)
+    // Steer mode is the explicit "inject NOW" path; everything else sent
+    // mid-turn queues (harness-style) and goes out when the turn ends.
+    if (steerMode && busy) {
+      updateInput('')
+      setSteerMode(false)
+      try {
+        // Fire-and-forget: the haptics bridge round-trip must not delay the
+        // steer (same as the queue-send path below).
+        void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
         await steerRun(text)
-      } else if (busy) {
-        return
-      } else {
-        updateInput('')
-        await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
-        await sendPrompt(text)
+      } catch (e) {
+        updateInput(text)
+        Alert.alert('Steer failed', e instanceof Error ? e.message : 'unknown')
       }
+      return
+    }
+    if (busy) {
+      if (!storedId) return // nowhere to queue yet — keep the text
+      if (!enqueueSend(storedId, text)) {
+        Alert.alert('Queue full', 'Remove a queued message or wait for the current reply to finish.')
+        return
+      }
+      updateInput('')
+      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+      return
+    }
+    try {
+      updateInput('')
+      // Fire-and-forget: don't delay the user bubble on the haptics bridge.
+      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+      await sendPrompt(text)
     } catch (e) {
       updateInput(text)
       Alert.alert('Send failed', e instanceof Error ? e.message : 'unknown')
@@ -322,6 +455,14 @@ export default function Chat() {
 
   useEffect(() => stopRecTimer, [])
   useEffect(() => {
+    if (!busy) setSteerMode(false)
+  }, [busy])
+
+  // The finished-turn tool log collapses on its own; expanded review is a
+  // momentary state, so any turn start/end or chat switch re-collapses it.
+  useEffect(() => { setToolsOpen(false) }, [storedId, busy])
+
+  useEffect(() => {
     setAnswerText('')
     setSecretValue('')
     setBatchAnswers({})
@@ -338,21 +479,33 @@ export default function Chat() {
     })
   })()
 
-  const canSend = !!input.trim() && (!busy || steerMode)
+  const canSend = !!input.trim()
   const isSlashMode = slashQuery !== null
   const cmdCount = slashItems?.filter((i) => i.kind !== 'skill').length ?? 0
   const skillCount = slashItems?.filter((i) => i.kind === 'skill').length ?? 0
+  // Collapsed tool-log label: "bash ×2, read ×4, edit" — the names are the
+  // content the user is looking for when the live rows fold away.
+  const toolSummary = (() => {
+    const counts = new Map<string, number>()
+    for (const t of tls) counts.set(t.name, (counts.get(t.name) ?? 0) + 1)
+    return [...counts.entries()].map(([name, n]) => (n > 1 ? `${name} ×${n}` : name)).join(', ')
+  })()
 
   // Stable row renderer: without this, every stream flush re-created the
   // closure and re-rendered every visible bubble, not just the growing one.
   const onRetryMsg = useCallback((id: string) => { void retryMessage(id).catch(() => {}) }, [])
   // Stable so MessageBubble's memo holds across stream flushes.
   const onEffortPress = useCallback(() => { setOptionSheet({ command: 'reasoning', allowText: false }) }, [])
+  // Command-card rows: a suggestion/list tap drops the command in the composer
+  // (one leading slash — the card already applies slashLabel).
+  const onCommandInsert = useCallback((line: string) => { updateInput(line); setSlashItems(null) }, [updateInput])
+  // Card footer + error-card "Browse all commands" chip open the browser.
+  const onOpenCatalog = useCallback(() => setCatalogOpen(true), [])
   const renderMsg = useCallback(
     ({ item }: { item: ChatMessage }) => (
-      <MessageBubble m={item} onRetry={onRetryMsg} effort={curEffort || undefined} onEffortPress={onEffortPress} />
+      <MessageBubble m={item} onRetry={onRetryMsg} effort={curEffort || undefined} onEffortPress={onEffortPress} onCommandInsert={onCommandInsert} onOpenCatalog={onOpenCatalog} showThinking={showThinking} />
     ),
-    [onRetryMsg, onEffortPress, curEffort],
+    [onRetryMsg, onEffortPress, curEffort, onCommandInsert, onOpenCatalog, showThinking],
   )
   // FlatList contract: with a stable renderItem, memoized cells only
   // re-evaluate when `extraData` changes. Without this, streaming updates
@@ -360,23 +513,29 @@ export default function Chat() {
   // ends ("waits, then dumps the whole reply"). Derived from message state so
   // it changes exactly when a row's content can have: text length, thinking
   // size (reasoning can grow without the answer text changing), segment count
-  // (a re-think after output adds a block).
-  const extraData = msgs
-    .map((m) => {
-      const thinkChars = m.segments?.reduce((n, seg) => n + (seg.kind === 'thinking' ? seg.text.length : 0), 0) ?? 0
-      return `${m.id}:${m.text.length}:${thinkChars}:${m.segments?.length ?? 0}:${m.streaming ? 's' : ''}:${m.status ?? ''}`
-    })
-    .join('|')
+  // (a re-think after output adds a block). Memoized so keystrokes and the
+  // 1Hz recording timer stop paying an O(messages×segments) rebuild — the
+  // value (and therefore the Fabric contract) is identical.
+  const extraData = useMemo(
+    () =>
+      msgs
+        .map((m) => {
+          const thinkChars = m.segments?.reduce((n, seg) => n + (seg.kind === 'thinking' ? seg.text.length : 0), 0) ?? 0
+          return `${m.id}:${m.text.length}:${thinkChars}:${m.segments?.length ?? 0}:${m.streaming ? 's' : ''}:${m.status ?? ''}`
+        })
+        .join('|') + (showThinking ? ':T' : ':F'),
+    [msgs, showThinking],
+  )
 
   return (
     <SafeAreaView style={s.safe} edges={['bottom']}>
       <ScreenShell
         title={title || 'Relay'}
-        onSearch={() => router.push('/(tabs)/sessions')}
+        onSearch={() => router.navigate('/(tabs)/sessions')}
         right={
           curModel ? (
             <Pressable
-              style={s.modelChip}
+              style={({ pressed }) => [s.modelChip, pressed && s.btnPressed]}
               onPress={() => setModelPickerOpen(true)}
               hitSlop={6}
               accessibilityLabel={`Current model ${curModel}. Tap to change`}
@@ -393,7 +552,11 @@ export default function Chat() {
           keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
         >
           {!online ? (
-            <Pressable style={s.banner} onPress={() => { void retryNow().catch(() => {}) }} accessibilityLabel="Reconnect">
+            <Pressable
+              style={({ pressed }) => [s.banner, pressed && s.btnPressed]}
+              onPress={() => { void retryNow().catch(() => {}) }}
+              accessibilityLabel="Reconnect"
+            >
               <Text style={s.bannerText}>
                 {conn === 'connecting' ? 'Connecting…' : `Offline${gerr ? ' — tap to retry' : ''}`}
                 {qb.length ? ` · ${qb.length} queued` : ''}
@@ -401,8 +564,26 @@ export default function Chat() {
             </Pressable>
           ) : null}
 
+          {/* Switch/create failure: the optimistic swap already put the user
+              on the target chat, so the retry lives HERE — the placeholder
+              keeps the cached transcript readable offline in the meantime. */}
+          {banner ? (
+            <Pressable
+              style={({ pressed }) => [s.banner, pressed && s.btnPressed]}
+              onPress={() => banner.retry?.()}
+              accessibilityLabel={banner.retry ? 'Retry' : undefined}
+            >
+              <Text style={s.bannerText}>{banner.text}</Text>
+            </Pressable>
+          ) : null}
+
           <FlatList
             ref={listRef}
+            // Keyed by STORED id: a real chat swap mounts a clean list (no
+            // inherited offsets, no wasted row mounts), while a live-id
+            // rotation (boot placeholder→real, background reattach) keeps
+            // the list and the user's scroll position intact.
+            key={storedId ?? 'boot'}
             data={msgs}
             keyExtractor={(m) => m.id}
             renderItem={renderMsg}
@@ -410,39 +591,86 @@ export default function Chat() {
             contentContainerStyle={{ paddingBottom: 16, flexGrow: msgs.length ? 0 : 1 }}
             keyboardShouldPersistTaps="handled"
             keyboardDismissMode="interactive"
-            onScroll={(e) => {
-              const { layoutMeasurement, contentOffset, contentSize } = e.nativeEvent
-              const nearBottom = contentSize.height - (layoutMeasurement.height + contentOffset.y) < 120
-              setStick(nearBottom)
-              setShowScrollBtn(!nearBottom && msgs.length > 5)
-            }}
-            scrollEventThrottle={200}
+            onScroll={readScroll}
+            onScrollEndDrag={readScroll}
+            onMomentumScrollEnd={readScroll}
+            onContentSizeChange={(_w, h) => { scrollMetrics.current.contentH = h; evalBottom() }}
+            onLayout={(e) => { scrollMetrics.current.viewH = e.nativeEvent.layout.height; evalBottom() }}
+            scrollEventThrottle={16}
             ListEmptyComponent={
-              <View style={s.empty}>
-                {STARTERS.map((st) => (
-                  <Pressable
-                    key={st.label}
-                    style={({ pressed }) => [s.starter, pressed && s.starterPressed]}
-                    onPress={() => {
-                      if (st.label === 'Browse slash commands') updateInput('/')
-                      else updateInput(st.label)
-                    }}
-                    accessibilityLabel={st.label}
-                  >
-                    <Ionicons name={st.icon} size={19} color={C.textDim} />
-                    <Text style={s.starterText}>{st.label}</Text>
-                  </Pressable>
-                ))}
-              </View>
+              booting ? (
+                // A chat whose content is still on its way (placeholder +
+                // resume over a slow link) must never look like a brand-new
+                // chat — the starters are ONLY for genuinely empty ones.
+                <View style={s.booting}>
+                  <ActivityIndicator color={C.accent} />
+                  <Text style={s.bootingText}>Loading chat…</Text>
+                </View>
+              ) : (
+                <View style={s.empty}>
+                  {STARTERS.map((st) => (
+                    <Pressable
+                      key={st.label}
+                      style={({ pressed }) => [s.starter, pressed && s.starterPressed]}
+                      onPress={() => {
+                        if (st.label === 'Browse slash commands') updateInput('/')
+                        else updateInput(st.label)
+                      }}
+                      accessibilityLabel={st.label}
+                    >
+                      <Ionicons name={st.icon} size={19} color={C.textDim} />
+                      <Text style={s.starterText}>{st.label}</Text>
+                    </Pressable>
+                  ))}
+                </View>
+              )
             }
           />
 
           {/* Run status — quiet, above the composer. Reasoning lives on the
-              message itself now (collapsed "Thinking" block), not here. */}
+              message itself now (collapsed "Thinking" block), not here. While
+              the turn runs the tool rows show live; once it ends the log
+              collapses to one tappable line so a finished turn stops eating
+              screen space. */}
           {(tls.length > 0 || td.length > 0) ? (
             <View style={s.runFooter}>
-              {tls.slice(-3).map((t: ToolItem) => <ToolRow key={t.id} t={t} />)}
-              {tls.length > 3 ? <Text style={s.moreTools}>+{tls.length - 3} more</Text> : null}
+              {busy ? (
+                <>
+                  {tls.slice(-3).map((t: ToolItem) => <ToolRow key={t.id} t={t} />)}
+                  {tls.length > 3 ? <Text style={s.moreTools}>+{tls.length - 3} more</Text> : null}
+                </>
+              ) : tls.length > 0 && !toolsOpen ? (
+                <Pressable
+                  style={({ pressed }) => [s.toolsToggle, pressed && s.btnPressed]}
+                  onPress={() => setToolsOpen(true)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Show ${tls.length} tool calls: ${toolSummary}`}
+                >
+                  <Ionicons name="terminal-outline" size={11} color={C.accent} />
+                  <Text style={s.toolsToggleText} numberOfLines={1}>
+                    {toolSummary}
+                  </Text>
+                  <Ionicons name="chevron-up" size={12} color={C.textFaint} />
+                </Pressable>
+              ) : tls.length > 0 ? (
+                <>
+                  <Pressable
+                    style={({ pressed }) => [s.toolsToggle, pressed && s.btnPressed]}
+                    onPress={() => setToolsOpen(false)}
+                    accessibilityRole="button"
+                    accessibilityLabel="Hide tool calls"
+                  >
+                    <Ionicons name="terminal-outline" size={11} color={C.accent} />
+                    <Text style={s.toolsToggleText} numberOfLines={1}>
+                      {toolSummary}
+                    </Text>
+                    <Ionicons name="chevron-down" size={12} color={C.textFaint} />
+                  </Pressable>
+                  <ScrollView style={s.toolsOpenList} keyboardShouldPersistTaps="handled">
+                    {tls.map((t: ToolItem) => <ToolRow key={t.id} t={t} />)}
+                  </ScrollView>
+                </>
+              ) : null}
               {td.length > 0 ? (
                 <View style={s.todos}>
                   {td.slice(0, 4).map((t, i) => (
@@ -457,7 +685,11 @@ export default function Chat() {
           ) : null}
 
           {showScrollBtn ? (
-            <Pressable style={s.fab} onPress={() => { setStick(true); listRef.current?.scrollToEnd?.({ animated: true }) }} accessibilityLabel="Jump to latest">
+              <Pressable
+                style={({ pressed }) => [s.fab, pressed && s.btnPressed]}
+                onPress={jumpToLatest}
+                accessibilityLabel="Jump to latest"
+              >
               <Ionicons name="arrow-down" size={19} color={C.text} />
             </Pressable>
           ) : null}
@@ -532,7 +764,11 @@ export default function Chat() {
                   return (
                     <Pressable
                       key={c}
-                      style={[s.sheetBtn, deny ? s.denyBtn : { backgroundColor: c === 'always' ? C.accentDark : C.accent }]}
+                      style={({ pressed }) => [
+                        s.sheetBtn,
+                        deny ? s.denyBtn : { backgroundColor: c === 'always' ? C.accentDark : C.accent },
+                        pressed && s.btnPressed,
+                      ]}
                       onPress={() => {
                         void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
                         void respondApproval(c as 'once' | 'session' | 'always' | 'deny')
@@ -563,7 +799,7 @@ export default function Chat() {
                       {q.choices?.map((o) => (
                         <Pressable
                           key={o}
-                          style={[s.clarifyBtn, batchAnswers[q.qid] === o && s.clarifyOn]}
+                          style={({ pressed }) => [s.clarifyBtn, batchAnswers[q.qid] === o && s.clarifyOn, pressed && s.btnPressed]}
                           onPress={() => setBatchAnswers((a) => ({ ...a, [q.qid]: o }))}
                         >
                           <Text style={[s.clarifyText, batchAnswers[q.qid] === o && { color: C.onAccent }]}>{o}</Text>
@@ -581,7 +817,10 @@ export default function Chat() {
                       ) : null}
                     </View>
                   ))}
-                  <Pressable style={[s.sheetBtn, { backgroundColor: C.accent }]} onPress={() => { void respondClarifyBatch(batchAnswers) }}>
+                  <Pressable
+                    style={({ pressed }) => [s.sheetBtn, { backgroundColor: C.accent }, pressed && s.btnPressed]}
+                    onPress={() => { void respondClarifyBatch(batchAnswers) }}
+                  >
                     <Text style={[s.sheetBtnText, { color: C.onAccent }]}>Send</Text>
                   </Pressable>
                 </>
@@ -589,7 +828,11 @@ export default function Chat() {
                 <>
                   <Text style={s.sheetBody}>{req.question ?? 'Clarification needed'}</Text>
                   {req.options?.map((o) => (
-                    <Pressable key={o} style={s.clarifyBtn} onPress={() => { void respondClarify(o) }}>
+                    <Pressable
+                      key={o}
+                      style={({ pressed }) => [s.clarifyBtn, pressed && s.btnPressed]}
+                      onPress={() => { void respondClarify(o) }}
+                    >
                       <Text style={s.clarifyText}>{o}</Text>
                     </Pressable>
                   ))}
@@ -603,7 +846,7 @@ export default function Chat() {
                       accessibilityLabel="Clarification answer"
                     />
                     <Pressable
-                      style={s.miniSend}
+                      style={({ pressed }) => [s.miniSend, pressed && s.btnPressed]}
                       onPress={() => { const t = answerText; setAnswerText(''); void respondClarify(t) }}
                       accessibilityLabel="Send clarification"
                     >
@@ -636,10 +879,16 @@ export default function Chat() {
                 accessibilityLabel="Secret value"
               />
               <View style={[s.sheetRow, { marginTop: 10 }]}>
-                <Pressable style={[s.sheetBtn, { backgroundColor: C.accent }]} onPress={() => { const v = secretValue; setSecretValue(''); void respondPrivileged(true, v || undefined) }}>
+                <Pressable
+                  style={({ pressed }) => [s.sheetBtn, { backgroundColor: C.accent }, pressed && s.btnPressed]}
+                  onPress={() => { const v = secretValue; setSecretValue(''); void respondPrivileged(true, v || undefined) }}
+                >
                   <Text style={[s.sheetBtnText, { color: C.onAccent }]}>Send</Text>
                 </Pressable>
-                <Pressable style={[s.sheetBtn, s.denyBtn]} onPress={() => { setSecretValue(''); void respondPrivileged(false) }}>
+                <Pressable
+                  style={({ pressed }) => [s.sheetBtn, s.denyBtn, pressed && s.btnPressed]}
+                  onPress={() => { setSecretValue(''); void respondPrivileged(false) }}
+                >
                   <Text style={[s.sheetBtnText, { color: C.red }]}>Deny</Text>
                 </Pressable>
               </View>
@@ -648,9 +897,56 @@ export default function Chat() {
 
           {/* ── Composer: rounded pill, like ChatGPT ── */}
           <View style={[s.composerWrap, { paddingBottom: Math.max(insets.bottom, 10) }]}>
+            {queued.length > 0 ? (
+              <View style={s.queueStrip}>
+                <View style={s.queueHead}>
+                  <Ionicons name="time-outline" size={12} color={C.accent} />
+                  <Text style={s.queueHeadText}>
+                    {queued.length === 1 ? '1 message' : `${queued.length} messages`} queued ·{' '}
+                    {busy ? 'sends when this reply finishes' : online ? 'sending…' : 'waiting for connection'}
+                  </Text>
+                </View>
+                {queued.slice(0, 3).map((q) => (
+                  <View key={q.id} style={s.queueRow}>
+                    <Pressable
+                      style={({ pressed }) => [s.queueMsg, pressed && s.btnPressed]}
+                      onPress={() => { updateInput(q.text); removeQueued(storedId, q.id) }}
+                      accessibilityLabel={`Edit queued message: ${q.text.slice(0, 60)}`}
+                    >
+                      <Text style={s.queueMsgText} numberOfLines={1}>{q.text}</Text>
+                    </Pressable>
+                    {busy ? (
+                      <Pressable
+                        style={({ pressed }) => [s.queueAct, pressed && s.btnPressed]}
+                        onPress={() => {
+                          removeQueued(storedId, q.id)
+                          jumpToLatest()
+                          // If the steer fails, keep the text queued rather than losing it.
+                          steerRun(q.text).catch(() => { if (!enqueueSend(storedId, q.text)) updateInput(q.text) })
+                        }}
+                        hitSlop={6}
+                        accessibilityLabel="Send this now as a steer"
+                      >
+                        <Ionicons name="flash-outline" size={14} color={C.accent} />
+                      </Pressable>
+                    ) : null}
+                    <Pressable
+                      style={({ pressed }) => [s.queueAct, pressed && s.btnPressed]}
+                      onPress={() => removeQueued(storedId, q.id)}
+                      hitSlop={6}
+                      accessibilityLabel="Remove queued message"
+                    >
+                      <Ionicons name="close" size={14} color={C.textDim} />
+                    </Pressable>
+                  </View>
+                ))}
+                {queued.length > 3 ? <Text style={s.queueMore}>+{queued.length - 3} more</Text> : null}
+              </View>
+            ) : null}
+
             <View style={s.composer}>
               <Pressable
-                style={s.attach}
+                style={({ pressed }) => [s.attach, pressed && s.btnPressed]}
                 onPress={() => Alert.alert('Attachments', 'Send an image or file and Hermes will pick it up.')}
                 hitSlop={8}
                 accessibilityLabel="Add attachment"
@@ -663,19 +959,24 @@ export default function Chat() {
                 value={input}
                 onChangeText={updateInput}
                 placeholder={
-                  isSlashMode ? 'Filter commands…' : steerMode && busy ? 'Steer the running task…' : busy ? 'Working…' : 'Ask Hermes'
+                  isSlashMode
+                    ? 'Filter commands…'
+                    : steerMode && busy
+                      ? 'Steer the running task…'
+                      : busy
+                        ? 'Reply — queued until it finishes'
+                        : 'Ask Hermes'
                 }
                 placeholderTextColor={C.textFaint}
                 multiline={Platform.OS !== 'web'}
                 returnKeyType="send"
                 onSubmitEditing={() => { if (Platform.OS === 'web') void send() }}
                 accessibilityLabel="Message input"
-                editable={busy ? steerMode : true}
               />
 
               {busy ? (
                 <Pressable
-                  style={s.sendBtn}
+                  style={({ pressed }) => [s.sendBtn, pressed && s.btnPressed]}
                   onPress={() => { void stopRun() }}
                   hitSlop={8}
                   accessibilityLabel="Stop"
@@ -684,7 +985,7 @@ export default function Chat() {
                 </Pressable>
               ) : (
                 <Pressable
-                  style={[s.iconCircle, recording && s.recOn]}
+                  style={({ pressed }) => [s.iconCircle, recording && s.recOn, pressed && s.btnPressed]}
                   onPress={toggleRecord}
                   disabled={!!voiceState}
                   hitSlop={8}
@@ -699,7 +1000,7 @@ export default function Chat() {
               )}
 
               <Pressable
-                style={[s.sendBtn, !canSend && s.sendOff]}
+                style={({ pressed }) => [s.sendBtn, !canSend && s.sendOff, pressed && s.btnPressed]}
                 onPress={() => { void send() }}
                 disabled={!canSend}
                 hitSlop={8}
@@ -715,7 +1016,7 @@ export default function Chat() {
 
             {busy ? (
               <Pressable
-                style={[s.steerChip, steerMode && s.steerChipOn]}
+                style={({ pressed }) => [s.steerChip, steerMode && s.steerChipOn, pressed && s.btnPressed]}
                 onPress={() => setSteerMode(!steerMode)}
                 accessibilityRole="button"
                 accessibilityLabel={steerMode ? 'Steer mode on' : 'Steer mode'}
@@ -726,8 +1027,14 @@ export default function Chat() {
             ) : null}
           </View>
 
-          {/* Interactive pickers — /model and options/mixed commands */}
+          {/* Interactive pickers — /model, options/mixed commands, and the command browser */}
           <ModelPickerSheet open={modelPickerOpen} onClose={() => setModelPickerOpen(false)} />
+          <CommandCatalogSheet
+            open={catalogOpen}
+            onClose={() => setCatalogOpen(false)}
+            onInsert={onCommandInsert}
+            onRunFallback={() => { setCatalogOpen(false); void runSlash('/help') }}
+          />
           {optionSheet ? (
             <CommandOptionsSheet
               command={optionSheet.command}
@@ -737,7 +1044,10 @@ export default function Chat() {
               loadChoices={async () => {
                 // Dynamic options (personalities, skins, handoff targets…)
                 // come from the gateway's own completion scorer.
-                const items = await completeSlash(`/${optionSheet.command} `, sid ?? undefined)
+                // activeLiveId resolves the optimistic switch/create windows
+                // so the RPC never sees a placeholder id.
+                const live = await activeLiveId().catch(() => null)
+                const items = await completeSlash(`/${optionSheet.command} `, live ?? undefined)
                 return items
                   .filter((it) => it.text && !it.text.startsWith('/'))
                   .map((it) => ({ value: it.text, meta: it.meta }))
@@ -758,14 +1068,37 @@ export default function Chat() {
 const s = StyleSheet.create({
   safe: { flex: 1, backgroundColor: C.bg },
   root: { flex: 1, backgroundColor: C.bg },
+  // Shared press feedback so every tappable answers on the frame it's hit.
+  btnPressed: { opacity: 0.6 },
   banner: { backgroundColor: '#241A08', paddingVertical: 9, paddingHorizontal: 14 },
   bannerText: { color: C.amber, fontSize: 12.5, fontWeight: '600', textAlign: 'center' },
   empty: { paddingHorizontal: 16, paddingTop: 24, gap: 2 },
+  booting: { flex: 1, flexGrow: 1, alignItems: 'center', justifyContent: 'center', gap: 10, paddingVertical: 80 },
+  bootingText: { color: C.textFaint, fontSize: 13.5 },
   starter: { flexDirection: 'row', alignItems: 'center', gap: 14, minHeight: 44, justifyContent: 'flex-start' },
   starterPressed: { opacity: 0.6 },
   starterText: { color: C.textDim, fontSize: 15.5, fontWeight: '500' },
   runFooter: { borderTopWidth: 1, borderTopColor: C.borderSoft, backgroundColor: C.bg, paddingVertical: 4, maxHeight: 190 },
   moreTools: { color: C.textFaint, fontSize: 11.5, paddingHorizontal: 16, marginTop: 2 },
+  // Collapsed tool-log affordance: a bordered chip (same idiom as the steer
+  // chip) so it reads as a tappable control, not missing UI.
+  toolsToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    alignSelf: 'flex-start',
+    marginHorizontal: 16,
+    marginVertical: 5,
+    maxWidth: '92%',
+    paddingHorizontal: 10,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: C.bgCard,
+    borderWidth: 1,
+    borderColor: C.border,
+  },
+  toolsToggleText: { color: C.textDim, fontSize: 11.5, fontWeight: '700', flexShrink: 1 },
+  toolsOpenList: { maxHeight: 170 },
   todos: { paddingHorizontal: 16, paddingVertical: 2 },
   todo: { color: C.textDim, fontSize: 12.5, lineHeight: 18 },
   usage: { color: C.textFaint, fontSize: 11, paddingHorizontal: 16, paddingBottom: 2 },
@@ -852,4 +1185,21 @@ const s = StyleSheet.create({
   },
   steerChipOn: { backgroundColor: C.accent },
   steerText: { color: C.textDim, fontSize: 11.5, fontWeight: '700' },
+  queueStrip: {
+    backgroundColor: C.bgElev,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: C.border,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginBottom: 6,
+    gap: 4,
+  },
+  queueHead: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  queueHeadText: { color: C.textDim, fontSize: 11, fontWeight: '700' },
+  queueRow: { flexDirection: 'row', alignItems: 'center', gap: 4, minHeight: 30 },
+  queueMsg: { flex: 1, justifyContent: 'center' },
+  queueMsgText: { color: C.text, fontSize: 13.5, lineHeight: 18 },
+  queueAct: { width: 30, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },
+  queueMore: { color: C.textFaint, fontSize: 11, paddingLeft: 2 },
 })

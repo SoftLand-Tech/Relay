@@ -92,6 +92,11 @@ export const liveProvider = atom<string>('')
 /** The active session's live reasoning effort (e.g. "high") — the main lever
  *  on how long the thinking phase lasts, applied live by config.set. */
 export const liveReasoning = atom<string>('')
+/** Whether thinking blocks render in the chat — mirrors the gateway's
+ *  `reasoning` display config. Server-side `hide` also stops streaming the
+ *  deltas at all; this gate additionally hides blocks already sitting in
+ *  the transcript, which the server-side switch alone never touches. */
+export const liveReasoningDisplay = atom<'show' | 'hide'>('show')
 /** Cached `model.options` payload — refetched with `force` when stale. */
 export const modelOptions = atom<ModelOptions | null>(null)
 export const modelOptionsLoading = atom<boolean>(false)
@@ -131,6 +136,27 @@ export function hookModelState() {
 }
 
 // ── Fetch ──────────────────────────────────────────────────────────────────
+
+/**
+ * Read the session's `reasoning` display config into the atom. Called when
+ * the chat tab gains a session and by the Agent tab's refresh, so the
+ * toggle and the chat renderer always agree on one source of truth.
+ */
+export async function fetchReasoningDisplay(sessionId?: string | null): Promise<'show' | 'hide'> {
+  try {
+    const { rpc } = await gw()
+    const r = await rpc<{ value?: string; display?: string }>('config.get', {
+      key: 'reasoning',
+      ...(sessionId ? { session_id: sessionId } : {}),
+    })
+    const display = r?.display === 'hide' ? 'hide' : 'show'
+    liveReasoningDisplay.set(display)
+    return display
+  } catch (err) {
+    log('warn', 'model', `config.get reasoning failed: ${String(err)}`)
+    return liveReasoningDisplay.get()
+  }
+}
 
 /**
  * Provider inventory for the picker. Cached in the atom; pass `force` to

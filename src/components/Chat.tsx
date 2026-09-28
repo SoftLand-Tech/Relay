@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react'
-import { View, Text, StyleSheet, Pressable, ActivityIndicator } from 'react-native'
+import React, { useEffect, useRef, useState } from 'react'
+import { View, Text, StyleSheet, Pressable, ActivityIndicator, Animated, AccessibilityInfo } from 'react-native'
 // The maintained fork. The original `react-native-markdown-display` pins
 // markdown-it 10, which does `require('punycode')` — a Node builtin that
 // Metro's Hermes runtime does not provide, so it breaks the Android bundle.
@@ -12,6 +12,7 @@ import { Ionicons } from '@expo/vector-icons'
 import { speakText, stopTts } from '../lib/voice'
 import { C } from '../lib/theme'
 import { formatThinkMeta, type ChatMessage, type ChatSegment, type ToolItem } from '../lib/chat'
+import { CommandCard } from './CommandOutput'
 
 /** A message's renderable content: explicit segments, else its plain text. */
 function segmentsOf(m: ChatMessage): ChatSegment[] {
@@ -27,7 +28,7 @@ function fmtTime(ts: number): string {
   }
 }
 
-const mdStyles = {
+const mdBase = {
   body: { color: C.text, fontSize: 16, lineHeight: 24 },
   paragraph: { marginTop: 0, marginBottom: 12 },
   code_inline: { color: C.accent, backgroundColor: 'rgba(57,202,219,0.12)', borderRadius: 4, paddingHorizontal: 5, fontSize: 14.5 },
@@ -44,7 +45,61 @@ const mdStyles = {
   table: { borderColor: C.border },
   th: { color: C.text, borderColor: C.border },
   td: { color: C.textDim, borderColor: C.border },
+}
+
+export const mdStyles = mdBase as never
+
+/** Denser markdown for command-output cards: 14.5/21 body, tighter paragraphs. */
+export const cardMdStyles = {
+  ...mdBase,
+  body: { ...mdBase.body, fontSize: 14.5, lineHeight: 21 },
+  paragraph: { ...mdBase.paragraph, marginBottom: 8 },
 } as never
+
+/**
+ * Three bouncing dots — the "the agent is on it" pulse, shown wherever a
+ * turn is visibly in flight but nothing has landed yet. Native-driver
+ * animation, so the loop costs nothing on the JS thread while streams flush.
+ * Static (faded) dots under the OS reduce-motion setting.
+ */
+export const ThinkingDots = React.memo(function ThinkingDots() {
+  const [reduce, setReduce] = useState(false)
+  useEffect(() => {
+    AccessibilityInfo.isReduceMotionEnabled().then(setReduce).catch(() => {})
+  }, [])
+  const dots = useRef<Animated.Value[]>([0, 1, 2].map(() => new Animated.Value(0))).current
+  useEffect(() => {
+    if (reduce) return
+    // Staggered bounce: every dot runs the same 880 ms up-down cycle,
+    // phase-shifted 160 ms, so the wave travels left→right.
+    const loops = dots.map((v: Animated.Value, i: number) =>
+      Animated.loop(
+        Animated.sequence([
+          Animated.delay(i * 160),
+          Animated.timing(v, { toValue: 1, duration: 280, useNativeDriver: true }),
+          Animated.timing(v, { toValue: 0, duration: 280, useNativeDriver: true }),
+          Animated.delay((2 - i) * 160),
+        ]),
+      ),
+    )
+    loops.forEach((l: { start: () => void; stop: () => void }) => l.start())
+    return () => loops.forEach((l: { start: () => void; stop: () => void }) => l.stop())
+  }, [reduce, dots])
+  return (
+    <View style={s.dotsRow} accessibilityLabel="Agent is working">
+      {dots.map((v: Animated.Value, i: number) => (
+        <Animated.View
+          key={i}
+          style={[
+            s.dot,
+            reduce && { opacity: 0.35 + i * 0.2 },
+            !reduce && { transform: [{ translateY: v.interpolate({ inputRange: [0, 1], outputRange: [0, -3] }) }] },
+          ]}
+        />
+      ))}
+    </View>
+  )
+})
 
 /**
  * Memoized: the chat screen re-renders on every stream flush (~30 Hz while a
@@ -53,13 +108,20 @@ const mdStyles = {
  * `onEffortPress` must be stable callbacks or every flush re-renders every row.
  */
 export const MessageBubble = React.memo(function MessageBubble({
-  m, onRetry, effort, onEffortPress,
+  m, onRetry, effort, onEffortPress, onCommandInsert, onOpenCatalog, showThinking = true,
 }: {
   m: ChatMessage
   onRetry?: (id: string) => void
   /** Live reasoning effort — forwarded to the thinking block while streaming. */
   effort?: string
   onEffortPress?: () => void
+  /** Inserts a command line into the composer (command-card suggestion/list rows). */
+  onCommandInsert?: (line: string) => void
+  /** Opens the command catalog browser (command-card footer / hint chip). */
+  onOpenCatalog?: () => void
+  /** The "Show thinking in the chat" preference. False hides every thinking
+   *  block — including ones already in the transcript — not just future ones. */
+  showThinking?: boolean
 }) {
   const isUser = m.role === 'user'
   const [copied, setCopied] = useState(false)
@@ -102,19 +164,29 @@ export const MessageBubble = React.memo(function MessageBubble({
 
   // ChatGPT renders the assistant unboxed and full width; only the user gets a bubble.
   if (!isUser) {
+    // Command outputs render as the card family, not as prose — a terminal
+    // write-once row (no segments, no streaming tail, no Listen).
+    if (m.cmd) {
+      return <CommandCard m={m} onInsert={onCommandInsert} onOpenCatalog={onOpenCatalog} />
+    }
     const segs = segmentsOf(m)
     const lastIdx = segs.length - 1
+    // What the user can actually see — hidden thinking doesn't count as
+    // content, or the "working" dots would never show while it runs quiet.
+    const hasVisibleText = (showThinking ? segs : segs.filter((seg) => seg.kind !== 'thinking')).some((seg) => seg.text.trim())
     return (
       <View style={s.botWrap}>
         {segs.map((seg, i) =>
           seg.kind === 'thinking' ? (
-            <ThinkingBlock
-              key={i}
-              seg={seg}
-              live={m.streaming && i === lastIdx}
-              effort={effort}
-              onEffortPress={onEffortPress}
-            />
+            showThinking ? (
+              <ThinkingBlock
+                key={i}
+                seg={seg}
+                live={m.streaming && i === lastIdx}
+                effort={effort}
+                onEffortPress={onEffortPress}
+              />
+            ) : null
           ) : m.streaming && i === lastIdx ? (
             // Plain Text while streaming: Markdown re-creates the message's whole
             // native view tree on every stream flush, and that churn starves the
@@ -126,7 +198,7 @@ export const MessageBubble = React.memo(function MessageBubble({
             <Markdown key={i} style={mdStyles}>{seg.text}</Markdown>
           ),
         )}
-        {m.streaming ? <Text style={s.cursor}>▍</Text> : null}
+        {m.streaming ? (hasVisibleText ? <Text style={s.cursor}>▍</Text> : <ThinkingDots />) : null}
         {m.status === 'failed' ? (
           <View style={s.failedRow}>
             <Ionicons name="alert-circle" size={15} color={C.red} />
@@ -136,10 +208,20 @@ export const MessageBubble = React.memo(function MessageBubble({
         {m.text && !m.streaming ? (
           <View style={s.botActions}>
             <Text style={s.time}>{fmtTime(m.ts)}</Text>
-            <Pressable onPress={copy} hitSlop={10} style={s.iconBtn} accessibilityLabel="Copy message">
+            <Pressable
+              onPress={copy}
+              hitSlop={10}
+              style={({ pressed }) => [s.iconBtn, pressed && s.iconPressed]}
+              accessibilityLabel="Copy message"
+            >
               <Ionicons name={copied ? 'checkmark' : 'copy-outline'} size={15} color={copied ? C.greenSoft : C.textFaint} />
             </Pressable>
-            <Pressable onPress={() => { void toggleSpeak() }} hitSlop={10} style={s.iconBtn} accessibilityLabel={speakState === 'playing' ? 'Stop playback' : 'Listen'}>
+            <Pressable
+              onPress={() => { void toggleSpeak() }}
+              hitSlop={10}
+              style={({ pressed }) => [s.iconBtn, pressed && s.iconPressed]}
+              accessibilityLabel={speakState === 'playing' ? 'Stop playback' : 'Listen'}
+            >
               {speakState === 'loading' ? (
                 <ActivityIndicator color={C.textFaint} size="small" />
               ) : (
@@ -164,7 +246,11 @@ export const MessageBubble = React.memo(function MessageBubble({
           <Ionicons name="alert-circle" size={15} color={C.red} />
           <Text style={s.failedText}>{m.error ?? 'Not sent'}</Text>
           {onRetry ? (
-            <Pressable onPress={() => onRetry(m.id)} style={s.retryBtn} accessibilityLabel="Retry send">
+            <Pressable
+              onPress={() => onRetry(m.id)}
+              style={({ pressed }) => [s.retryBtn, pressed && s.iconPressed]}
+              accessibilityLabel="Retry send"
+            >
               <Ionicons name="refresh" size={13} color={C.text} />
               <Text style={s.retryText}>Retry</Text>
             </Pressable>
@@ -211,11 +297,11 @@ export const ThinkingBlock = React.memo(function ThinkingBlock({
     <Pressable
       onPress={() => setOpen(!open)}
       accessibilityLabel={open ? 'Collapse thinking' : 'Expand thinking'}
-      style={s.think}
+      style={({ pressed }) => [s.think, pressed && s.iconPressed]}
     >
       <View style={s.thinkHead}>
         <Ionicons name={open ? 'chevron-down' : 'chevron-forward'} size={12} color={C.textFaint} />
-        {live ? <ActivityIndicator size="small" color={C.textFaint} style={s.thinkSpin} /> : null}
+        {live ? <ThinkingDots /> : null}
         <Text style={s.thinkLabel}>
           {live ? 'Thinking' : 'Thought'}
           {meta ? ` · ${meta}` : ''}
@@ -223,7 +309,7 @@ export const ThinkingBlock = React.memo(function ThinkingBlock({
         {live && effort && onEffortPress ? (
           <Pressable
             hitSlop={6}
-            style={s.effortChip}
+            style={({ pressed }) => [s.effortChip, pressed && s.iconPressed]}
             onPress={onEffortPress}
             accessibilityLabel={`Reasoning effort ${effort}. Tap to change`}
           >
@@ -265,8 +351,11 @@ const s = StyleSheet.create({
   userText: { color: C.text, fontSize: 16, lineHeight: 23 },
   streamText: { color: C.text, fontSize: 16, lineHeight: 24 },
   cursor: { color: C.textDim, fontSize: 15, marginTop: 2 },
+  dotsRow: { flexDirection: 'row', alignItems: 'center', gap: 3, height: 12, marginTop: 2 },
+  dot: { width: 5, height: 5, borderRadius: 3, backgroundColor: C.textFaint },
   botActions: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 6, marginLeft: -6 },
   iconBtn: { width: 30, height: 30, alignItems: 'center', justifyContent: 'center', borderRadius: 15 },
+  iconPressed: { opacity: 0.5 },
   time: { color: C.textFaint, fontSize: 11, marginRight: 6 },
   failedRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8 },
   failedText: { color: C.red, fontSize: 12.5, flexShrink: 1 },
@@ -274,7 +363,6 @@ const s = StyleSheet.create({
   retryText: { color: C.text, fontSize: 12, fontWeight: '700' },
   think: { backgroundColor: C.bgCard, borderRadius: 12, padding: 10, marginBottom: 8 },
   thinkHead: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  thinkSpin: { transform: [{ scale: 0.7 }] },
   thinkLabel: { color: C.textFaint, fontSize: 11.5, fontWeight: '600' },
   thinkText: { color: C.textDim, fontSize: 12.5, lineHeight: 18, marginTop: 6 },
   effortChip: { marginLeft: 'auto', backgroundColor: C.bgHover, borderRadius: 10, paddingHorizontal: 7, paddingVertical: 2 },

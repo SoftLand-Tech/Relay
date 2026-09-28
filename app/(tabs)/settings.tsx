@@ -1,19 +1,18 @@
-import React from 'react'
+import React, { useMemo } from 'react'
 import { View, Text, Pressable, ScrollView, StyleSheet, Alert, Switch } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
+import { computed } from 'nanostores'
 import { useStore } from '@nanostores/react'
 import { Ionicons } from '@expo/vector-icons'
 import * as Clipboard from 'expo-clipboard'
 import { router } from 'expo-router'
-import { connConfig, connectionState, gatewayError, disconnect, rpc, retryNow, redactedUrl,
+import { connConfig, connectionState, gatewayError, disconnect, retryNow, redactedUrl,
   servers as serversStore, activeServerId, switchToServer, removeServer, forgetActiveServer,
   mostRecentServer, type SavedServer } from '../../src/lib/gateway'
 import { newChat, activeSession, messages } from '../../src/lib/chat'
 import { diagLog, logText } from '../../src/lib/log'
 import {
-  notificationsEnabled, expoPushToken, notificationPermission, setNotificationsEnabled,
-  ensureNotificationPermission, fetchPushToken, sendTestNotification, easProjectId,
-  remotePushSupported, remotePushBlockedReason,
+  notificationsEnabled, setNotificationsEnabled, ensureNotificationPermission,
 } from '../../src/lib/push'
 import { C } from '../../src/lib/theme'
 import { ScreenShell } from '../../src/components/ScreenShell'
@@ -89,10 +88,12 @@ function SettingsInner() {
   const err = useStore(gatewayError)
   const logs = useStore(diagLog)
   const sid = useStore(activeSession)
-  const msgs = useStore(messages)
+  // Primitive count only — the messages array gets a fresh identity on every
+  // stream flush (33ms cadence), which would re-render this whole tree; a
+  // length computed re-renders only when a message is added or removed. The
+  // two clipboard exports read the live array imperatively at press time.
+  const msgCount = useStore(useMemo(() => computed(messages, (m) => m.length), []))
   const notifOn = useStore(notificationsEnabled)
-  const pushTok = useStore(expoPushToken)
-  const perm = useStore(notificationPermission)
   const savedServers = useStore(serversStore)
   const activeId = useStore(activeServerId)
 
@@ -118,7 +119,7 @@ function SettingsInner() {
       `Server: ${cfg ? redactedUrl(cfg) : '—'}`,
       `Computers saved: ${savedServers.length}`,
       `State: ${state}${err ? ` (${err.slice(0, 200)})` : ''}`,
-      `Session: ${sid ?? '—'} · messages: ${msgs.length}`,
+      `Session: ${sid ?? '—'} · messages: ${msgCount}`,
       ``,
       `--- log ---`,
       logText().slice(-4000),
@@ -128,7 +129,7 @@ function SettingsInner() {
   }
 
   const exportTranscript = async () => {
-    const text = msgs.map((m) => `[${new Date(m.ts).toLocaleString()}] ${m.role}: ${m.text}`).join('\n\n')
+    const text = messages.get().map((m) => `[${new Date(m.ts).toLocaleString()}] ${m.role}: ${m.text}`).join('\n\n')
     if (!text) { Alert.alert('Empty', 'No messages to export.'); return }
     await Clipboard.setStringAsync(text.slice(0, 50000))
     Alert.alert('Copied', 'Transcript copied to clipboard.')
@@ -194,7 +195,7 @@ function SettingsInner() {
                       <Text style={s.rowSub} numberOfLines={1}>{sv.tls ? 'WSS' : 'WS'} · {sv.host}</Text>
                     </Pressable>
                     <Pressable
-                      style={s.serverForget}
+                      style={({ pressed }) => [s.serverForget, pressed && s.rowPressed]}
                       hitSlop={8}
                       onPress={() => Alert.alert('Forget this computer?', `Removes ${sv.name} from this device.`, [
                         { text: 'Cancel', style: 'cancel' },
@@ -257,46 +258,10 @@ function SettingsInner() {
           </View>
           <Divider />
           <Row
-            icon="mail-unread-outline"
-            label="Permission"
-            sub={perm}
-            disabled
-          />
-          <Row
-            icon="key-outline"
-            label="Push token"
-            sub={pushTok ? `${pushTok.slice(0, 24)}…` : 'none yet'}
-            disabled
-          />
-          <Divider />
-          <Row
             icon="checkmark-circle-outline"
             label="Enable notifications"
             onPress={() => { void ensureNotificationPermission().catch(() => {}) }}
           />
-          <Row
-            icon="flash-outline"
-            label="Send test notification"
-            onPress={() => { void sendTestNotification().catch((e) => Alert.alert('Failed', e instanceof Error ? e.message : String(e))) }}
-          />
-          <Row
-            icon="download-outline"
-            label="Get push token"
-            sub="For hermes-push-watch.py on your PC"
-            disabled={!remotePushSupported}
-            onPress={async () => {
-              try {
-                const t = await fetchPushToken()
-                await Clipboard.setStringAsync(t)
-                Alert.alert('Push token ready', 'Copied. Paste it into hermes-push-watch.py --push-token so approvals reach you when the app is closed.')
-              } catch (e) { Alert.alert('Push token failed', e instanceof Error ? e.message : '') }
-            }}
-          />
-          {remotePushBlockedReason ? (
-            <Text style={s.warn}>{remotePushBlockedReason}</Text>
-          ) : !easProjectId() ? (
-            <Text style={s.note}>Remote push needs a linked EAS project.{'\n'}Run `npx eas init` in hermes-mobile and rebuild — local alerts work without it.</Text>
-          ) : null}
         </Section>
 
         <Section title="CHAT">
@@ -310,7 +275,7 @@ function SettingsInner() {
           <Row
             icon="share-outline"
             label="Export transcript"
-            sub={msgs.length ? `${msgs.length} messages — copies to clipboard` : 'No messages yet'}
+            sub={msgCount ? `${msgCount} messages — copies to clipboard` : 'No messages yet'}
             onPress={exportTranscript}
           />
         </Section>
@@ -321,18 +286,6 @@ function SettingsInner() {
             label="Copy diagnostics"
             sub={`${logs.length} log lines`}
             onPress={copyDiagnostics}
-          />
-          <Divider />
-          <Row
-            icon="pulse-outline"
-            label="Test connection"
-            sub="gateway.ping round-trip"
-            onPress={async () => {
-              try {
-                const r = await rpc<unknown>('gateway.ping', {}, 10_000)
-                Alert.alert('gateway.ping OK', JSON.stringify(r).slice(0, 300))
-              } catch (e) { Alert.alert('Ping failed', String(e)) }
-            }}
           />
         </Section>
 

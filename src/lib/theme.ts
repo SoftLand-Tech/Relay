@@ -35,6 +35,15 @@ export const C = {
   red: '#FF5A5A',
   amber: '#F5A524',
 
+  // Derived soft tints — the translucent washes the command-output cards fill
+  // their alert/confirm bodies and hint chips with. 12% of the parent ink;
+  // accentSoft doubles as the code_inline background so cards and chat prose
+  // render inline code identically. No component hardcodes an rgba of a token.
+  accentSoft: 'rgba(57,202,219,0.12)',
+  redSoft: 'rgba(255,90,90,0.12)',
+  amberSoft: 'rgba(245,165,36,0.12)',
+  greenTint: 'rgba(74,222,128,0.12)',
+
   border: '#26383A',
   borderSoft: '#1A2628',
 

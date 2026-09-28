@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
-import { View, Text, FlatList, Pressable, TextInput, StyleSheet, RefreshControl, Alert, ActivityIndicator } from 'react-native'
+import { View, Text, FlatList, Pressable, TextInput, StyleSheet, RefreshControl, Alert } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useStore } from '@nanostores/react'
@@ -66,7 +66,6 @@ function SessionsInner() {
   const busy = useStore(busyStoredIds)
   const attention = useStore(attentionById)
   const pending = useStore(pendingCount)
-  const [opening, setOpening] = useState<string | null>(null)
 
   // The store is shared with the drawer, so both show the same list in the
   // same order. `search` is not a valid RPC param (extra="forbid"), so the
@@ -90,30 +89,24 @@ function SessionsInner() {
   }, [list, query])
 
   const openSession = useCallback(
-    async (s: Sess) => {
-      setOpening(s.id)
-      try {
-        await switchToSession(s.id)
-        router.push('/(tabs)/chat')
-      } catch (e) {
-        Alert.alert('Could not open', e instanceof Error ? e.message : '')
-      } finally {
-        setOpening(null)
-      }
+    (s: Sess) => {
+      // Navigate first — the content swap is synchronous inside
+      // switchToSession (entry reuse or placeholder + cached transcript),
+      // with the resume RPC backgrounded. On failure the user is already on
+      // the chat tab, where its retry banner surfaces the error.
+      router.navigate('/(tabs)/chat')
+      void switchToSession(s.id).catch(() => {
+        // The chat screen's banner owns the failure.
+      })
     },
     [],
   )
 
-  const startNew = useCallback(async () => {
-    setOpening('new')
-    try {
-      await newChat()
-      router.push('/(tabs)/chat')
-    } catch (e) {
-      Alert.alert('Could not start a chat', e instanceof Error ? e.message : String(e))
-    } finally {
-      setOpening(null)
-    }
+  const startNew = useCallback(() => {
+    router.navigate('/(tabs)/chat')
+    void newChat().catch(() => {
+      // Same: the chat screen's retry banner owns the failure.
+    })
   }, [])
 
   const removeSession = useCallback((s: Sess) => {
@@ -153,21 +146,19 @@ function SessionsInner() {
             accessibilityLabel="Search sessions"
           />
           <Pressable
-            style={[s.newBtn, opening === 'new' && s.newBtnBusy]}
-            onPress={() => void startNew()}
-            disabled={opening === 'new'}
+            style={({ pressed }) => [s.newBtn, pressed && s.btnPressed]}
+            onPress={startNew}
             accessibilityLabel="New chat"
           >
-            {opening === 'new' ? (
-              <ActivityIndicator color={C.onAccent} size="small" />
-            ) : (
-              <Ionicons name="add" size={20} color={C.onAccent} />
-            )}
+            <Ionicons name="add" size={20} color={C.onAccent} />
           </Pressable>
         </View>
 
       {pending > 0 ? (
-        <Pressable style={s.alertRow} onPress={() => router.push('/(tabs)/chat')}>
+        <Pressable
+          style={({ pressed }) => [s.alertRow, pressed && s.btnPressed]}
+          onPress={() => router.navigate('/(tabs)/chat')}
+        >
           <Text style={s.alertText}>
             {pending} question{pending > 1 ? 's' : ''} waiting on you — tap to answer
           </Text>
@@ -175,13 +166,13 @@ function SessionsInner() {
       ) : null}
 
       {error ? (
-        <Pressable style={s.errRow} onPress={() => { void load(true) }}>
+        <Pressable style={({ pressed }) => [s.errRow, pressed && s.btnPressed]} onPress={() => { void load(true) }}>
           <Text style={s.errText}>{error} — tap to retry</Text>
         </Pressable>
       ) : null}
 
       {!online && !loading ? (
-        <Pressable style={s.errRow} onPress={() => { void retryNow().catch(() => {}) }}>
+        <Pressable style={({ pressed }) => [s.errRow, pressed && s.btnPressed]} onPress={() => { void retryNow().catch(() => {}) }}>
           <Text style={s.errText}>Not connected — tap to reconnect</Text>
         </Pressable>
       ) : null}
@@ -198,8 +189,8 @@ function SessionsInner() {
           const label = item.title || item.preview?.slice(0, 80) || 'Untitled'
           return (
             <Pressable
-              style={[s.row, isCurrent && s.rowActive]}
-              onPress={() => void openSession(item)}
+              style={({ pressed }) => [s.row, pressed && s.rowPressed, isCurrent && s.rowActive]}
+              onPress={() => openSession(item)}
               onLongPress={() => void removeSession(item)}
               accessibilityLabel={`Open ${label}`}
             >
@@ -217,7 +208,6 @@ function SessionsInner() {
                   {fmtWhen(item.started_at) ? ` · ${fmtWhen(item.started_at)}` : ''}
                 </Text>
               </View>
-              {opening === item.id ? <ActivityIndicator color={C.accent} size="small" /> : null}
             </Pressable>
           )
         }}
@@ -226,7 +216,7 @@ function SessionsInner() {
             <View style={s.emptyWrap}>
               <Text style={s.empty}>{online ? (query ? 'No matches' : 'No conversations yet') : 'Offline'}</Text>
               {online && !query ? (
-                <Pressable style={s.newBtn} onPress={() => void startNew()}>
+                <Pressable style={({ pressed }) => [s.newBtn, pressed && s.btnPressed]} onPress={startNew}>
                   <Text style={s.newText}>Start chatting</Text>
                 </Pressable>
               ) : null}
@@ -245,13 +235,14 @@ const s = StyleSheet.create({
   searchRow: { paddingHorizontal: 16, paddingBottom: 10, flexDirection: 'row', gap: 8 },
   search: { flex: 1, backgroundColor: C.bgCard, borderRadius: 22, paddingHorizontal: 16, paddingVertical: 12, color: C.text, fontSize: 15, minHeight: 44 },
   newBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: C.accent, justifyContent: 'center', alignItems: 'center' },
-  newBtnBusy: { opacity: 0.6 },
+  btnPressed: { opacity: 0.6 },
   newText: { color: C.onAccent, fontSize: 14, fontWeight: '700' },
   alertRow: { paddingVertical: 10, paddingHorizontal: 14, backgroundColor: '#241A08' },
   alertText: { color: C.amber, fontSize: 13, fontWeight: '700', textAlign: 'center' },
   errRow: { padding: 12, alignItems: 'center' },
   errText: { color: C.red, fontSize: 13 },
   row: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 13, minHeight: 58, gap: 8 },
+  rowPressed: { backgroundColor: C.bgHover },
   rowActive: { backgroundColor: C.bgCard },
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   title: { color: C.text, fontSize: 15, fontWeight: '600', flexShrink: 1 },

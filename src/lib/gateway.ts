@@ -51,6 +51,11 @@ let lastConfig: ConnConfig | null = null
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null
 let connectGen = 0
 let manualClose = false
+// Serializes the per-dial persistence writes (saveConfig + upsertServer) so
+// overlapping dials can't interleave upsertServer's server-list
+// read-modify-write. The writes OVERLAP the WebSocket handshake — they never
+// gate it — but stay ordered with respect to each other.
+let persistChain: Promise<void> = Promise.resolve()
 
 type EventSink = (e: GatewayEvent) => void
 const sinks = new Set<EventSink>()
@@ -400,10 +405,21 @@ async function dial(c: ConnConfig, opts?: { isRetry?: boolean }): Promise<void> 
   manualClose = false
   gatewayError.set(null)
   connectionState.set('connecting')
-  await saveConfig(v)
-  // Remember this computer (even if it's unreachable right now — it should
-  // still show up in the saved list once the phone can reach it again).
-  try { await upsertServer(v) } catch (err) { log('warn', 'auth', `remember computer failed: ${String(err)}`) }
+  // Persistence runs CONCURRENTLY with the dial, not before it: the writes
+  // are pure side effects for the handshake (the token rides the URL; the
+  // connect path below reads none of what they write), so the reconnect tap
+  // starts the WebSocket immediately. The computer is still remembered even
+  // while unreachable, exactly as before — a saveConfig failure skips the
+  // upsert just like the old early-abort did. Each dial awaits its tail on
+  // the exits callers observe (throw / happy end); superseded early-returns
+  // skip the await because whatever dial superseded us awaits a chain that
+  // already contains our writes.
+  const persist = (persistChain = persistChain.then(async () => {
+    await saveConfig(v)
+    // Remember this computer (even if it's unreachable right now — it should
+    // still show up in the saved list once the phone can reach it again).
+    try { await upsertServer(v) } catch (err) { log('warn', 'auth', `remember computer failed: ${String(err)}`) }
+  }).catch((err) => { log('warn', 'auth', `save connection failed: ${String(err)}`) }))
 
   if (!v.tls && !isLocalHost(v.host)) {
     log('warn', 'gateway', 'plain ws:// to non-local host — token travels unencrypted')
@@ -427,6 +443,7 @@ async function dial(c: ConnConfig, opts?: { isRetry?: boolean }): Promise<void> 
     gatewayError.set(`${redactedUrl(v)} — ${msg}`)
     log('error', 'gateway', `connect failed: ${msg}`)
     scheduleReconnect()
+    await persist
     throw err
   }
   if (gen !== connectGen) { stopReady(); return }
@@ -447,6 +464,7 @@ async function dial(c: ConnConfig, opts?: { isRetry?: boolean }): Promise<void> 
   reconnectAttempt.set(0)
   connectionState.set('open')
   log('info', 'gateway', `connected ${redactedUrl(v)}${ready ? '' : ' (no gateway.ready yet)'}`)
+  await persist
 }
 
 export async function connect(c: ConnConfig): Promise<void> {

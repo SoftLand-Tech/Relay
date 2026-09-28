@@ -9,6 +9,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { Modal, View, Text, Pressable, TextInput, ScrollView, StyleSheet, KeyboardAvoidingView, Platform, ActivityIndicator } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import * as Haptics from 'expo-haptics'
+import { cachedCommandChoices, rememberCommandChoices } from '../lib/slash'
 import { C } from '../lib/theme'
 
 export interface OptionChoice {
@@ -42,7 +43,11 @@ export function CommandOptionsSheet({
 }) {
   const [query, setQuery] = useState('')
   const [custom, setCustom] = useState('')
-  const [dynamic, setDynamic] = useState<OptionChoice[] | null>(null)
+  // Repeat opens of the same command render the cached choices instantly —
+  // the RPC only pays on the first open (cache is dropped on catalog reload).
+  const [dynamic, setDynamic] = useState<OptionChoice[] | null>(() =>
+    choices.length ? null : cachedCommandChoices(command),
+  )
   const [loadingDyn, setLoadingDyn] = useState(false)
   const loaded = useRef(false)
 
@@ -56,12 +61,20 @@ export function CommandOptionsSheet({
   useEffect(() => {
     if (choices.length || !loadChoices || loaded.current) return
     loaded.current = true
+    const cached = cachedCommandChoices(command)
+    if (cached) {
+      setDynamic(cached)
+      return
+    }
     setLoadingDyn(true)
     loadChoices()
-      .then((items) => setDynamic(items))
+      .then((items) => {
+        rememberCommandChoices(command, items)
+        setDynamic(items)
+      })
       .catch(() => setDynamic([]))
       .finally(() => setLoadingDyn(false))
-  }, [choices.length, loadChoices])
+  }, [choices.length, loadChoices, command])
 
   const run = (argText: string) => {
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
@@ -79,7 +92,12 @@ export function CommandOptionsSheet({
               <Text style={s.title}>/{command}</Text>
               {description ? <Text style={s.sub} numberOfLines={2}>{description}</Text> : null}
             </View>
-            <Pressable style={s.close} hitSlop={8} onPress={onClose} accessibilityLabel="Close">
+            <Pressable
+              style={({ pressed }) => [s.close, pressed && s.iconPressed]}
+              hitSlop={8}
+              onPress={onClose}
+              accessibilityLabel="Close"
+            >
               <Ionicons name="close" size={18} color={C.textDim} />
             </Pressable>
           </View>
@@ -136,7 +154,7 @@ export function CommandOptionsSheet({
                   accessibilityLabel={`Custom argument for ${command}`}
                 />
                 <Pressable
-                  style={[s.customSend, !custom.trim() && s.customSendOff]}
+                  style={({ pressed }) => [s.customSend, !custom.trim() && s.customSendOff, pressed && s.iconPressed]}
                   onPress={() => { if (custom.trim()) run(custom.trim()) }}
                   disabled={!custom.trim()}
                   accessibilityLabel={`Run ${command}`}
@@ -169,6 +187,7 @@ const s = StyleSheet.create({
   title: { color: C.text, fontSize: 15.5, fontWeight: '700' },
   sub: { color: C.textFaint, fontSize: 11.5, marginTop: 1 },
   close: { width: 28, height: 28, borderRadius: 14, backgroundColor: C.bgCard, alignItems: 'center', justifyContent: 'center' },
+  iconPressed: { opacity: 0.55 },
   searchWrap: {
     flexDirection: 'row', alignItems: 'center', gap: 8,
     marginHorizontal: 14, marginBottom: 6,
