@@ -122,3 +122,21 @@ export function upsertOptimisticRow(storedId: string, title: string) {
     ]),
   )
 }
+
+/**
+ * Live title sync: when a `session.title` / `session.info` event renames a
+ * session mid-turn, patch the row so the drawer reads fresh without waiting
+ * for the next `session.list` poll. Emitters carry different ids (stored key
+ * vs live id), so accept candidates and match any row; unknown ids are
+ * ignored — the next full fetch brings the row.
+ */
+export function patchRowTitle(candidates: Array<string | undefined>, title: string) {
+  if (!title) return
+  const rows = sessionRows.get()
+  const ids = new Set(candidates.filter((x): x is string => !!x))
+  const idx = rows.findIndex((r) => ids.has(r.id))
+  if (idx < 0 || rows[idx].title === title) return
+  const next = [...rows]
+  next[idx] = { ...next[idx], title }
+  sessionRows.set(next)
+}

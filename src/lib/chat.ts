@@ -4,7 +4,7 @@ import { AppState } from 'react-native'
 import { rpc, onEvent, onServerRequest, getClient } from './gateway'
 import { log } from './log'
 import { notifyLocal, setBadge } from './push'
-import { bindLiveId, upsertOptimisticRow } from './sessionList'
+import { bindLiveId, upsertOptimisticRow, patchRowTitle } from './sessionList'
 import { hookModelState, noteSessionInfo } from './modelState'
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -491,7 +491,11 @@ const CREATE_COLS = 120
 export async function createSession(title?: string): Promise<ResumeResult> {
   const res = await rpc<{ session_id?: string; stored_session_id?: string; messages?: Array<Record<string, unknown>>; info?: { model?: string; provider?: string; reasoning_effort?: string } }>(
     'session.create',
-    { title: title || 'Hermes Pocket', cols: CREATE_COLS, source: 'mobile' },
+    // A create-time title is MANUAL authority server-side: it is applied at
+    // the end of turn 1, clobbering the auto-title and permanently blocking
+    // its upgrades. Only send one when the caller explicitly has a name;
+    // "New chat" stays a client-side placeholder.
+    { ...(title ? { title } : {}), cols: CREATE_COLS, source: 'mobile' },
   )
   const id = res?.session_id
   if (!id) throw new Error('session.create returned no id')
@@ -934,7 +938,10 @@ export function hookChatEvents() {
         // when present, otherwise the event's.
         const sid = typeof p.session_id === 'string' && sessionsById.get()[p.session_id] ? p.session_id : eSid
         const title = typeof p.title === 'string' && p.title ? p.title : undefined
-        if (title) patchSession(sid, { title })
+        if (title) {
+          patchSession(sid, { title })
+          patchRowTitle([typeof p.stored_session_id === 'string' ? p.stored_session_id : undefined, storedIdFor(eSid)], title)
+        }
         if (typeof p.stored_session_id === 'string' && p.stored_session_id) {
           void rememberStoredId(sid, p.stored_session_id)
         }
@@ -948,7 +955,12 @@ export function hookChatEvents() {
 
       case 'session.title': {
         const title = typeof p.title === 'string' ? p.title : undefined
-        if (title) patchSession(eSid, { title })
+        if (title) {
+          patchSession(eSid, { title })
+          // The payload's session_id is the STORED key; the row list is keyed
+          // by stored ids, so the drawer renames mid-turn too.
+          patchRowTitle([storedIdFor(eSid), typeof p.session_id === 'string' ? p.session_id : undefined], title)
+        }
         break
       }
 
