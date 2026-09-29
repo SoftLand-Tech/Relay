@@ -33,7 +33,6 @@ interface Sess {
 // drawer) so both agree on the unit.
 
 function fmtWhen(ts?: number): string {
-  const s = useStyles(makeS)
   const ms = toMs(ts)
   if (!ms) return ''
   const d = new Date(ms)

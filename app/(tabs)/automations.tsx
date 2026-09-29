@@ -45,7 +45,6 @@ function when(iso?: string | null): string {
 }
 
 function fmtFull(iso?: string | null): string {
-  const s = useStyles(makeS)
   if (!iso) return '—'
   const t = Date.parse(iso)
   if (Number.isNaN(t)) return '—'
