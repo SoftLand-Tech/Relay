@@ -170,6 +170,10 @@ export default function Chat() {
     setStick(true)
     setShowScrollBtn(false)
     scrollMetrics.current = { y: 0, contentH: 0, viewH: 0 }
+    // Opening a chat parks at the LATEST message: the remounted list lays
+    // out over several frames, and each content-size event re-anchors to
+    // the end until the first scroll reading confirms we're there.
+    parkAtBottomRef.current = true
   }, [storedId])
 
   const updateInput = useCallback((t: string) => {
@@ -225,6 +229,12 @@ export default function Chat() {
   // content-size/layout changes, since a new message landing while scrolled
   // up fires no scroll event at all (that was the "button never shows" bug).
   const scrollMetrics = useRef({ y: 0, contentH: 0, viewH: 0 })
+  // True from chat-open until the first scroll reading lands near the
+  // bottom: while parking, layout events re-anchor to the end instead of
+  // evaluating "is the user at the bottom" against a not-yet-scrolled
+  // offset (which read as "scrolled up" and threw the jump button on a
+  // freshly opened chat — with the follow killed, it stuck until pressed).
+  const parkAtBottomRef = useRef(true)
   // Exact end-of-content scroll. FlatList's scrollToEnd undershoots by the
   // contentContainer's bottom reserve (the mascot clearance): on web it
   // estimates the target from cell metrics, which never see container
@@ -234,6 +244,10 @@ export default function Chat() {
   // contentH - viewH directly; fall back to scrollToEnd before the first
   // scroll event populates the metrics.
   const scrollListToEnd = useCallback((animated: boolean) => {
+    // An animated follow scroll emits its own intermediate scroll events,
+    // each >120px from the end at first — without this guard, evalBottom
+    // would cancel the follow mid-flight and strand the jump button on.
+    if (animated) stickUntil.current = Date.now() + 500
     const { contentH, viewH } = scrollMetrics.current
     if (viewH > 0 && contentH > viewH) {
       listRef.current?.scrollToOffset?.({ offset: contentH - viewH, animated })
@@ -260,6 +274,12 @@ export default function Chat() {
     const { layoutMeasurement, contentOffset, contentSize } = e.nativeEvent
     scrollMetrics.current = { y: contentOffset.y, contentH: contentSize.height, viewH: layoutMeasurement.height }
     evalBottom()
+    // Parked → arrived: the first reading within the at-bottom band ends
+    // the open-chat anchoring; from here the user owns the position.
+    const { y, contentH, viewH } = scrollMetrics.current
+    if (parkAtBottomRef.current && viewH > 0 && Math.max(0, contentH - viewH - y) < 120) {
+      parkAtBottomRef.current = false
+    }
   }, [evalBottom])
 
   /** Force the view to the newest message — every send dispatch and the
@@ -768,10 +788,39 @@ export default function Chat() {
             keyboardShouldPersistTaps="handled"
             keyboardDismissMode="interactive"
             onScroll={readScroll}
+            onScrollBeginDrag={() => {
+              // The user takes the wheel: end any open-chat parking and let
+              // position evaluations speak immediately, even if a
+              // programmatic follow armed its quiet window a moment ago.
+              parkAtBottomRef.current = false
+              stickUntil.current = 0
+            }}
             onScrollEndDrag={readScroll}
             onMomentumScrollEnd={readScroll}
-            onContentSizeChange={(_w, h) => { scrollMetrics.current.contentH = h; evalBottom() }}
-            onLayout={(e) => { scrollMetrics.current.viewH = e.nativeEvent.layout.height; evalBottom() }}
+            onContentSizeChange={(_w, h) => {
+              scrollMetrics.current.contentH = h
+              if (stick) {
+                // Content grew while following (or while parking at the
+                // latest on open): re-anchor to the end using THIS event's
+                // laid-out size — exact target, no 16ms guess, and it
+                // repeats through every layout stage of a restored
+                // transcript. Evaluating "at bottom?" here instead would use
+                // the pre-growth offset and kill the follow (that was the
+                // ghost jump-button bug).
+                scrollListToEnd(parkAtBottomRef.current ? false : !busy)
+              } else {
+                // Scrolled up: a message landing fires no scroll event at
+                // all, so THIS is where the jump button must re-check.
+                evalBottom()
+              }
+            }}
+            onLayout={(e) => {
+              scrollMetrics.current.viewH = e.nativeEvent.layout.height
+              // Skip the at-bottom evaluation while parking: at mount the
+              // offset is still 0 against a tall laid-out transcript, which
+              // read as "scrolled up" and threw the button on open.
+              if (!parkAtBottomRef.current) evalBottom()
+            }}
             scrollEventThrottle={16}
             ListEmptyComponent={
               booting ? (
