@@ -217,46 +217,92 @@ export function ScreenShell({
 
   return (
     <View style={s.root}>
-      <View style={[s.topBar, { paddingTop: insets.top + (S.trayHeader ? 8 : 6) }]}>
-        <Pressable
-          style={({ pressed }) => [s.circle, pressed && s.circlePressed]}
-          onPress={() => setOpen(true)}
-          hitSlop={8}
-          accessibilityLabel="Open menu"
-        >
-          <Icon name="menu" size={20} color={C.text} />
-        </Pressable>
-
-        <View style={s.titleWrap}>
-          {showBrand ? <Text style={s.brand}>Moch</Text> : null}
-          <Text style={[s.title, showBrand && s.titleDim]} numberOfLines={1}>
-            {title}
-          </Text>
+      {S.trayHeader ? (
+        // Mocheme tray: the title owns a centered line of its own — it never
+        // fights the model chip for width — and the controls sit below it.
+        <View style={[s.topBarTray, { paddingTop: insets.top + 8 }]}>
+          <View style={s.trayTitleWrap}>
+            {showBrand ? <Text style={s.trayBrand}>Moch</Text> : null}
+            <Text style={s.trayTitle} numberOfLines={1}>
+              {title}
+            </Text>
+          </View>
+          <View style={s.trayControls}>
+            <Pressable
+              style={({ pressed }) => [s.trayCircle, pressed && s.circlePressed]}
+              onPress={() => setOpen(true)}
+              hitSlop={8}
+              accessibilityLabel="Open menu"
+            >
+              <Icon name="menu" size={20} color={C.text} />
+            </Pressable>
+            <View style={s.traySpacer} />
+            {onSearch ? (
+              <Pressable
+                style={({ pressed }) => [s.trayCircle, pressed && s.circlePressed]}
+                onPress={onSearch}
+                hitSlop={8}
+                accessibilityLabel="Search chats"
+              >
+                <Icon name="search" size={18} color={C.text} />
+              </Pressable>
+            ) : null}
+            {right}
+            <Pressable
+              style={s.trayCircle}
+              hitSlop={8}
+              accessibilityLabel={online ? 'Connected' : 'Not connected'}
+            >
+              <Icon
+                name={online ? 'radio-button-on' : 'cloud-offline-outline'}
+                size={18}
+                color={online ? C.greenSoft : C.textFaint}
+              />
+            </Pressable>
+          </View>
         </View>
-
-        {onSearch ? (
+      ) : (
+        <View style={[s.topBar, { paddingTop: insets.top + 6 }]}>
           <Pressable
             style={({ pressed }) => [s.circle, pressed && s.circlePressed]}
-            onPress={onSearch}
+            onPress={() => setOpen(true)}
             hitSlop={8}
-            accessibilityLabel="Search chats"
+            accessibilityLabel="Open menu"
           >
-            <Icon name="search" size={18} color={C.text} />
+            <Icon name="menu" size={20} color={C.text} />
           </Pressable>
-        ) : null}
-        {right}
-        <Pressable
-          style={s.circle}
-          hitSlop={8}
-          accessibilityLabel={online ? 'Connected' : 'Not connected'}
-        >
-          <Icon
-            name={online ? 'radio-button-on' : 'cloud-offline-outline'}
-            size={18}
-            color={online ? C.greenSoft : C.textFaint}
-          />
-        </Pressable>
-      </View>
+
+          <View style={s.titleWrap}>
+            {showBrand ? <Text style={s.brand}>Moch</Text> : null}
+            <Text style={[s.title, showBrand && s.titleDim]} numberOfLines={1}>
+              {title}
+            </Text>
+          </View>
+
+          {onSearch ? (
+            <Pressable
+              style={({ pressed }) => [s.circle, pressed && s.circlePressed]}
+              onPress={onSearch}
+              hitSlop={8}
+              accessibilityLabel="Search chats"
+            >
+              <Icon name="search" size={18} color={C.text} />
+            </Pressable>
+          ) : null}
+          {right}
+          <Pressable
+            style={s.circle}
+            hitSlop={8}
+            accessibilityLabel={online ? 'Connected' : 'Not connected'}
+          >
+            <Icon
+              name={online ? 'radio-button-on' : 'cloud-offline-outline'}
+              size={18}
+              color={online ? C.greenSoft : C.textFaint}
+            />
+          </Pressable>
+        </View>
+      )}
 
       <View style={s.body}>{children}</View>
 
@@ -296,36 +342,53 @@ export function ScreenShell({
 
 const makeS = () => StyleSheet.create({
   root: { flex: 1, backgroundColor: C.bg },
-  // Mocheme: the top bar floats as a rounded tray card; Relay keeps the bare
-  // bar that today's app renders.
+  // Relay keeps today's bare bar; Mocheme's tray is its own block (topBarTray).
   topBar: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
     paddingHorizontal: 10,
-    paddingBottom: S.trayHeader ? 0 : 8,
-    marginHorizontal: S.trayHeader ? 10 : 0,
-    marginTop: S.trayHeader ? 8 : 0,
-    paddingVertical: S.trayHeader ? 8 : 0,
-    backgroundColor: S.trayHeader ? C.bgCard : 'transparent',
-    borderWidth: S.trayHeader ? 1 : 0,
+    paddingBottom: 8,
+  },
+  // Mocheme tray card — taller than the old bar: the title owns a centered
+  // line and the controls row sits beneath it.
+  topBarTray: {
+    marginHorizontal: 10,
+    marginTop: 8,
+    paddingHorizontal: 10,
+    paddingBottom: 8,
+    backgroundColor: C.bgCard,
+    borderWidth: 1,
     borderColor: C.border,
-    borderRadius: S.trayHeader ? 24 : 0,
+    borderRadius: 24,
     shadowColor: '#000',
-    shadowOpacity: S.trayHeader ? 0.35 : 0,
+    shadowOpacity: 0.35,
     shadowRadius: 20,
     shadowOffset: { width: 0, height: 6 },
-    elevation: S.trayHeader ? 8 : 0,
+    elevation: 8,
+  },
+  trayTitleWrap: { alignItems: 'center', marginBottom: 8, paddingHorizontal: 4 },
+  trayBrand: { color: C.textFaint, fontSize: 11.5, fontWeight: '700', letterSpacing: 0.5, marginBottom: 1 },
+  trayTitle: { color: C.text, fontSize: 16.5, fontWeight: '700' },
+  trayControls: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  traySpacer: { flex: 1 },
+  trayCircle: {
+    width: 38,
+    height: 38,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: C.bgElev,
+    borderWidth: 1,
+    borderColor: C.borderSoft,
   },
   circle: {
     width: 38,
     height: 38,
-    borderRadius: S.trayHeader ? 14 : 19,
+    borderRadius: 19,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: S.trayHeader ? C.bgElev : C.bgCard,
-    borderWidth: S.trayHeader ? 1 : 0,
-    borderColor: C.borderSoft,
+    backgroundColor: C.bgCard,
   },
   circlePressed: { opacity: 0.55 },
   titleWrap: { flex: 1, paddingHorizontal: 4 },
