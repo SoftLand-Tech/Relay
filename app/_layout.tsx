@@ -19,6 +19,7 @@ import { loadAttention, pendingOpenStoredId, requestOpenSession } from '../src/l
 import { loadDrafts } from '../src/lib/drafts'
 import { loadSendQueue } from '../src/lib/sendQueue'
 import { parseConnectUrl } from '../src/lib/pairing'
+import { pruneRelayMedia } from '../src/lib/mediaCache'
 import { C } from '../src/lib/theme'
 
 // Keep the native splash up until the animated overlay is committed on top
@@ -65,6 +66,9 @@ export default function RootLayout() {
     void loadAttention()
     void initPush()
     void refreshServers()
+    // Cold-start relay-media prune (>7 days, then oldest-first past 200 MB) —
+    // background, one-shot, and images are expo-image's cache's business.
+    void pruneRelayMedia()
     let cancelled = false
     ;(async () => {
       const saved = await loadSavedConfig()

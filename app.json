@@ -10,8 +10,9 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.hermes.pocket",
       "infoPlist": {
-        "NSCameraUsageDescription": "Scan the pairing QR shown by your Hermes server.",
+        "NSCameraUsageDescription": "Scan the pairing QR shown by your Hermes server and take photos to attach to your messages.",
         "NSMicrophoneUsageDescription": "Record voice messages for your agent.",
+        "NSPhotoLibraryUsageDescription": "Attach photos and videos to your messages.",
         "NSFaceIDUsageDescription": "Unlock your saved server token."
       },
       "config": {
@@ -63,7 +64,7 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "Scan the pairing QR shown by your Hermes server.",
+          "cameraPermission": "Scan the pairing QR shown by your Hermes server and take photos to attach to your messages.",
           "microphonePermission": "Record voice messages for your agent.",
           "recordAudioAndroid": true,
           "barcodeScannerEnabled": true
@@ -76,7 +77,10 @@
           "defaultChannel": "hermes-alerts"
         }
       ],
-      "expo-audio"
+      "expo-audio",
+      "expo-image",
+      "expo-video",
+      "expo-sharing"
     ],
     "scheme": "hermes",
     "extra": {

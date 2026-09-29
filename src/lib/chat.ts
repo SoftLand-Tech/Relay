@@ -9,6 +9,8 @@ import { hookModelState, noteSessionInfo } from './modelState'
 import { markAttention, clearAttention, pushToast, chatTabFocused, pendingOpenStoredId, type AttentionKind } from './attention'
 import { clearDraft, draftFor, setDraft } from './drafts'
 import { sendQueue, peekQueued, removeQueued, clearSendQueue, queueFor, enqueueSend, type QueuedSend } from './sendQueue'
+import { extractMedia, isDataUrlPath, joinedTextOf, appendRefText, stripMediaFromText, mediaSegment } from './media'
+import { processAttachments, detachImages, type PendingAttachment } from './mediaSend'
 // Type-only: erased at runtime, so chat.ts stays free of slash.ts's atom graph
 // (chat.ts already cannot load in plain node — react-native/AsyncStorage at
 // import time — and this keeps it that way).
@@ -16,9 +18,10 @@ import type { CommandMeta } from './slash'
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
-/** One block of an assistant message's content, in order. */
+/** One block of a message's content, in order (both roles). */
 export interface ChatSegment {
-  kind: 'thinking' | 'text'
+  kind: 'thinking' | 'text' | 'media'
+  /** Media segments always carry '' — every `.text` reader stays safe. */
   text: string
   /** thinking only — ms timestamp of the segment's first delta. */
   startedAt?: number
@@ -26,6 +29,19 @@ export interface ChatSegment {
   chars?: number
   /** thinking only — frozen "8s · ~52 tok/s" once the segment ends. */
   meta?: string
+  // ── media only ──
+  mediaType?: 'image' | 'video' | 'audio' | 'file'
+  /** Gateway-absolute path (/api/files/* URLs are built from it); '' on an
+   *  optimistic user row until upload completes (then localUri renders). */
+  path?: string
+  name?: string
+  size?: number
+  mime?: string
+  /** Receive side: the gateway can no longer serve the path → error tile. */
+  state?: 'ok' | 'missing'
+  /** Send side only: the local file while the gateway path doesn't exist
+   *  yet. Never set on receive-side segments. */
+  localUri?: string
 }
 
 export interface ChatMessage {
@@ -481,6 +497,28 @@ function schedulePersist(liveId: string) {
   }, PERSIST_DEBOUNCE_MS))
 }
 
+/** Cached-transcript hygiene: a send-side localUri points at a picker/cache
+ *  file that is usually evicted by the next launch (its contract is
+ *  send-side-only), and an unpaired inline data-URL segment is megabytes of
+ *  base64 — neither belongs in an AsyncStorage blob. Server history is
+ *  authoritative and re-supplies both on resume; the stripped data-URL
+ *  segment keeps a `missing` marker so the offline cache shows a tile
+ *  instead of silently trying to render a dropped path. */
+function persistableMessages(list: ChatMessage[]): ChatMessage[] {
+  return list.slice(-MAX_MESSAGES).map((m) => {
+    if (!m.segments?.some((seg) => seg.kind === 'media' && (seg.localUri || isDataUrlPath(seg.path)))) return m
+    return {
+      ...m,
+      segments: m.segments.map((seg) => {
+        if (seg.kind !== 'media') return seg
+        if (seg.localUri) return { ...seg, localUri: undefined }
+        if (isDataUrlPath(seg.path)) return { ...seg, state: 'missing' as const }
+        return seg
+      }),
+    }
+  })
+}
+
 async function persistSession(s: SessionState) {
   const stored = s.storedId
   if (!stored || isPseudoStoredId(stored)) return
@@ -488,7 +526,7 @@ async function persistSession(s: SessionState) {
     const payload: PersistedTranscript = {
       v: 1,
       title: s.title,
-      messages: s.messages.slice(-MAX_MESSAGES),
+      messages: persistableMessages(s.messages),
       tools: s.tools.slice(-MAX_TOOLS),
     }
     await AsyncStorage.setItem(transcriptV2Key(stored), JSON.stringify(payload))
@@ -692,6 +730,87 @@ export async function flushOutbox(): Promise<void> {
       throw err
     }
   }
+}
+
+// ── Queued attachments (memory-only) ───────────────────────────────────────
+//
+// Messages composed while a turn runs ride the busy-queue; attachments
+// composed with them ride THIS map, keyed by the queued send's id. It is
+// deliberately not persisted — a PendingAttachment points at a local file
+// uri and a gateway upload that have no meaning after a restart (sendQueue
+// storage stays {id,text,ts}, and loadSendQueue drops the empty-text items
+// attachment-only sends produce). The queue strip's remove/edit/steer
+// actions (chat.tsx) and a successful flush are the cleanup points.
+
+const queuedAttachments = new Map<string, PendingAttachment[]>()
+
+/** Hand a queued message's attachments over to chat.ts (composer → queue). */
+export function setQueuedAttachments(queuedId: string, attachments: PendingAttachment[]): void {
+  if (attachments.length) queuedAttachments.set(queuedId, attachments)
+  else queuedAttachments.delete(queuedId)
+}
+
+/** Take (and forget) a queued message's attachments — the queue strip's
+ *  Edit flow moves them back into the composer so nothing is silently lost. */
+export function takeQueuedAttachments(queuedId: string): PendingAttachment[] {
+  const list = queuedAttachments.get(queuedId)
+  queuedAttachments.delete(queuedId)
+  return list ?? []
+}
+
+/** Build a user row's ordered segments: the words, then each attachment as a
+ *  media segment (localUri while there is no gateway path yet). */
+function userSegmentsFor(text: string, attachments: readonly PendingAttachment[]): ChatSegment[] {
+  const segments: ChatSegment[] = []
+  if (text) segments.push({ kind: 'text', text })
+  for (const att of attachments) {
+    segments.push(
+      mediaSegment({
+        mediaType: att.kind,
+        path: att.path ?? '',
+        name: att.name,
+        size: att.size,
+        mime: att.mime,
+        localUri: att.uri,
+      }),
+    )
+  }
+  return segments
+}
+
+/** After upload: bind each media segment to its gateway path (segments are
+ *  matched by the attachment's local uri, stable across the upload). */
+function patchRowMediaPaths(
+  liveId: string,
+  rowId: string,
+  attachments: readonly PendingAttachment[],
+  pathsById: Record<string, string>,
+) {
+  const byUri: Record<string, string> = {}
+  for (const att of attachments) {
+    const p = pathsById[att.id]
+    if (p) byUri[att.uri] = p
+  }
+  if (!Object.keys(byUri).length) return
+  const s = sessionsById.get()[liveId]
+  const idx = s?.messages.findIndex((m) => m.id === rowId) ?? -1
+  if (!s || idx < 0) return
+  const m = s.messages[idx]
+  if (!m.segments?.some((seg) => seg.kind === 'media')) return
+  const messages = [...s.messages]
+  messages[idx] = {
+    ...m,
+    segments: m.segments.map((seg) =>
+      // Binding the path RETIRES the localUri: its contract is send-side-only
+      // ("the local file while the gateway path doesn't exist yet"), and a
+      // localUri that survives into the persisted transcript renders a dead
+      // cache uri after the next restart instead of the durable path.
+      seg.kind === 'media' && seg.localUri && byUri[seg.localUri]
+        ? { ...seg, path: byUri[seg.localUri], localUri: undefined }
+        : seg,
+    ),
+  }
+  patchSession(liveId, { messages })
 }
 
 // ── Session lifecycle ──────────────────────────────────────────────────────
@@ -1218,9 +1337,26 @@ export function applyHistory(sessionId: string, list?: Array<Record<string, unkn
     const role = String(m.role ?? '') === 'user' ? 'user' : 'assistant'
     const raw = (m.content ?? m.text ?? '') as unknown
     const text = textOf(raw).trim()
-    if (!text) continue
     if (text === '[object Object]') continue
-    mapped.push({ id: nid(), role, text: text.slice(0, 8000), ts: Number(m.ts ?? m.timestamp ?? Date.now()) })
+    // Media-bearing history rows (@image:/@file: directives, markdown
+    // images, the gateway's inline native-vision data URLs) surface as media
+    // segments on both roles. The 8000-char cap is applied AFTER extraction:
+    // a data URL sliced mid-base64 would still match the scanner and become
+    // a corrupt, unrenderable segment. A row with nothing visible after
+    // extraction drops, exactly like the old empty-text drop.
+    const extracted = extractMedia(text ? [{ kind: 'text' as const, text }] : [])
+    const hasMedia = extracted.some((seg) => seg.kind === 'media')
+    if (!hasMedia && !text) continue
+    const capped = extracted.map((seg) =>
+      seg.kind === 'text' && seg.text.length > 8000 ? { ...seg, text: seg.text.slice(0, 8000) } : seg,
+    )
+    mapped.push({
+      id: nid(),
+      role,
+      text: (hasMedia ? joinedTextOf(capped) : text).slice(0, 8000),
+      ts: Number(m.ts ?? m.timestamp ?? Date.now()),
+      ...(hasMedia ? { segments: capped } : {}),
+    })
   }
   if (mapped.length) {
     patchSession(sessionId, { messages: mapped.slice(-MAX_MESSAGES) })
@@ -1237,9 +1373,23 @@ let sending = false
 // pending must not be queued behind (or delivered to) A.
 const sendingSessions = new Set<string>()
 
-export async function sendPrompt(rawText: string, opts?: { session?: string }) {
-  const text = rawText.trim().slice(0, 8000)
-  if (!text) return
+export async function sendPrompt(
+  rawText: string,
+  opts?: {
+    session?: string
+    attachments?: PendingAttachment[]
+    /** Chip progress sink (composer); absent on queue-flush sends. */
+    onAttachment?: (id: string, patch: Partial<PendingAttachment>) => void
+  },
+) {
+  const raw = rawText.trim()
+  const attachments = opts?.attachments ?? []
+  // Text-optional: attachment-only sends (ChatGPT captionless photos) are the
+  // point — early-return only when there is genuinely nothing to send.
+  if (!raw && !attachments.length) return
+  // The user's own 8000-char slice runs BEFORE ref_text is appended (the
+  // refs are budgeted on top, never truncated) — see appendRefText.
+  const text = raw.slice(0, 8000)
   flushStreams()
   // A pinned send targets one specific session (the busy-queue flush uses
   // this when its chat's turn ends while the user is elsewhere). Unpinned
@@ -1259,6 +1409,7 @@ export async function sendPrompt(rawText: string, opts?: { session?: string }) {
   sending = true
 
   let sid = ''
+  let rowId = ''
   try {
     try {
       const ps = pinned ? sessionsById.get()[pinned] : undefined
@@ -1279,13 +1430,25 @@ export async function sendPrompt(rawText: string, opts?: { session?: string }) {
     } catch (err) {
       // Offline — keep the message visible as failed with retry. Patch the
       // session we tried to reach (the active one unless this was pinned).
+      // The row keeps its media segments (rendered from localUri) so the
+      // user sees what failed; the attachments themselves are not retried
+      // (known silent-loss path: nothing was uploaded yet, the outbox stays
+      // text-only — see the design's finding 9).
       const target = pinned ?? activeSession.get()
       const t0 = target ? sessionsById.get()[target] : undefined
       if (t0) {
         patchSession(target!, {
           messages: [
             ...t0.messages,
-            { id: nid(), role: 'user', text, ts: Date.now(), status: 'failed', error: err instanceof Error ? err.message : 'Not connected' },
+            {
+              id: nid(),
+              role: 'user',
+              text,
+              ts: Date.now(),
+              status: 'failed',
+              error: err instanceof Error ? err.message : 'Not connected',
+              ...(attachments.length ? { segments: userSegmentsFor(text, attachments) } : {}),
+            },
           ],
         })
       }
@@ -1295,10 +1458,20 @@ export async function sendPrompt(rawText: string, opts?: { session?: string }) {
 
     // Patch THIS session: a fast chat switch mid-send must not graft the user
     // bubble onto whichever conversation is active by the time this runs.
+    rowId = nid()
     const s = sessionsById.get()[sid]
     if (s) {
       patchSession(sid, {
-        messages: [...s.messages, { id: nid(), role: 'user', text, ts: Date.now() }],
+        messages: [
+          ...s.messages,
+          {
+            id: rowId,
+            role: 'user',
+            text,
+            ts: Date.now(),
+            ...(attachments.length ? { segments: userSegmentsFor(text, attachments) } : {}),
+          },
+        ],
         tools: [],
         busy: true,
       })
@@ -1306,15 +1479,40 @@ export async function sendPrompt(rawText: string, opts?: { session?: string }) {
     // The user is here and acting — drop any stale badge on this chat.
     clearAttentionLive(sid)
     schedulePersist(sid)
-    await rpc('prompt.submit', { session_id: sid, text })
+
+    // ── Attach step (mirrors desktop withSessionNotFoundResume): upload +
+    // image.attach/file.attach AFTER the live sid resolves, immediately
+    // before prompt.submit. processAttachments detaches on its own internal
+    // failures; a prompt.submit failure below detaches explicitly so the
+    // session never carries orphaned images into the next turn.
+    let submitText = text
+    let attachedImagePaths: string[] = []
+    if (attachments.length) {
+      const outcome = await processAttachments({
+        sessionId: sid,
+        attachments,
+        onAttachment: opts?.onAttachment,
+      })
+      attachedImagePaths = outcome.attachedImagePaths
+      submitText = appendRefText(text, outcome.refTexts)
+      patchRowMediaPaths(sid, rowId, attachments, outcome.pathsById)
+    }
+    try {
+      await rpc('prompt.submit', { session_id: sid, text: submitText })
+    } catch (err) {
+      if (attachedImagePaths.length) void detachImages(sid, attachedImagePaths)
+      throw err
+    }
   } catch (err) {
     if (sid) {
       const s2 = sessionsById.get()[sid]
       if (s2) patchSession(sid, { busy: false })
       const list = [...(s2?.messages ?? [])]
-      const idx = [...list].reverse().findIndex((m) => m.role === 'user' && m.text === text)
+      const idx = rowId
+        ? list.findIndex((m) => m.id === rowId)
+        : [...list].reverse().findIndex((m) => m.role === 'user' && m.text === text)
       if (idx >= 0) {
-        const real = list.length - 1 - idx
+        const real = rowId ? idx : list.length - 1 - idx
         list[real] = { ...list[real], status: 'failed', error: err instanceof Error ? err.message : 'Send failed' }
         patchSession(sid, { messages: list })
       }
@@ -1333,6 +1531,9 @@ export async function retryMessage(id: string) {
   if (!sid) return
   const m = sessionsById.get()[sid]?.messages.find((x) => x.id === id)
   if (!m || m.role !== 'user') return
+  // Media rows are not retryable (design finding 9): the attachments can't be
+  // re-picked from here, so a text-only retry would silently drop them.
+  if (m.segments?.some((seg) => seg.kind === 'media')) return
   patchSession(sid, { messages: messages.get().filter((x) => x.id !== id) })
   await sendPrompt(m.text)
 }
@@ -1398,13 +1599,16 @@ function maybeFlushQueue(liveId: string): void {
   queueFlushes.add(liveId)
   void (async () => {
     try {
-      await sendPrompt(head.text, { session: liveId })
+      // Attachments composed with the head ride the in-memory map; nothing
+      // was uploaded yet, so the attach step runs inside this sendPrompt.
+      await sendPrompt(head.text, { session: liveId, attachments: queuedAttachments.get(head.id) })
       removeQueued(s.storedId, head.id)
+      queuedAttachments.delete(head.id)
       // No recursion here: the submit only ACKed — busy is already true, and
       // the new turn's end edge (or its failure) drives the next release.
     } catch {
-      // Send failed (offline, dead handle…): the head stays queued for the
-      // next idle edge. No retry loop.
+      // Send failed (offline, dead handle…): the head — and its attachments —
+      // stay queued for the next idle edge. No retry loop.
     } finally {
       queueFlushes.delete(liveId)
     }
@@ -1787,6 +1991,7 @@ export function hookChatEvents() {
         const cur = sessionsById.get()[eSid]
         if (!cur) break
         const list = [...cur.messages]
+        let finalJoined = ''
         for (let i = list.length - 1; i >= 0; i--) {
           if (list[i].role !== 'assistant' || !list[i].streaming) continue
           const failed = p.status === 'error' || !!p.error
@@ -1802,8 +2007,16 @@ export function hookChatEvents() {
             const lastTextIdx = segs.map((seg) => seg.kind).lastIndexOf('text')
             if (lastTextIdx >= 0) segs[lastTextIdx] = { ...segs[lastTextIdx], text: text.slice(0, 32000) }
             else segs.push({ kind: 'text', text: text.slice(0, 32000) })
-            done = { ...done, segments: segs, text: text.slice(0, 32000) }
+            done = { ...done, segments: segs }
           }
+          // Media extraction runs AFTER the supersede, in place: @image:/
+          // @file: directives and markdown images in the final text become
+          // media segments directly after their source segment. Idempotent —
+          // markers are stripped, so a later pass (history reload) is a no-op.
+          const base: ChatSegment[] = done.segments ?? (done.text ? [{ kind: 'text', text: done.text }] : [])
+          const extracted = extractMedia(base)
+          finalJoined = joinedTextOf(extracted).slice(0, 32000)
+          done = { ...done, segments: extracted, text: finalJoined }
           list[i] = freezeThoughts(done)
           break
         }
@@ -1816,7 +2029,9 @@ export function hookChatEvents() {
         schedulePersist(eSid)
         maybeFlushQueue(eSid)
         const failed = p.status === 'error' || !!p.error
-        const finalText = text || list[list.length - 1]?.text || ''
+        // Re-derived from the STRIPPED text segments (fallback: raw server
+        // text minus markers) so attention bodies never carry @file: noise.
+        const finalText = finalJoined || stripMediaFromText(text)
         flagAttention(
           eSid,
           failed ? 'error' : 'done',

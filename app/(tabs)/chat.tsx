@@ -18,8 +18,11 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useStore } from '@nanostores/react'
 import { Ionicons } from '@expo/vector-icons'
 import * as Haptics from 'expo-haptics'
-import { AudioModule, useAudioRecorder, RecordingPresets } from 'expo-audio'
+import * as ImagePicker from 'expo-image-picker'
+import * as DocumentPicker from 'expo-document-picker'
+import { AudioModule, useAudioRecorder, RecordingPresets, type RecordingOptions } from 'expo-audio'
 import { transcribeRecording, voiceBusy } from '../../src/lib/voice'
+import { VoiceRecStrip } from '../../src/components/VoiceRecStrip'
 import { clearBadge } from '../../src/lib/push'
 import { useFocusEffect, router, useLocalSearchParams } from 'expo-router'
 import {
@@ -53,6 +56,11 @@ import {
   type ChatMessage,
 } from '../../src/lib/chat'
 import { enqueueSend, removeQueued } from '../../src/lib/sendQueue'
+import { setQueuedAttachments, takeQueuedAttachments } from '../../src/lib/chat'
+import { MAX_ATTACHMENTS, ATTACH_MAX_BYTES, formatBytes, mediaKindForPath } from '../../src/lib/media'
+import type { PendingAttachment } from '../../src/lib/mediaSend'
+import { AttachmentChip } from '../../src/components/media/AttachmentChip'
+import { AttachSheet } from '../../src/components/media/AttachSheet'
 import { chatTabFocused } from '../../src/lib/attention'
 import { draftFor, setDraft } from '../../src/lib/drafts'
 import { isConnected as isConnectedAtom, connectionState, gatewayError, retryNow } from '../../src/lib/gateway'
@@ -74,6 +82,10 @@ const STARTERS = [
 ]
 
 const MAX_SLASH_ITEMS = 120
+
+// Module scope so the hook keeps one recorder across renders — and so the
+// VoiceRecStrip waveform gets live dB levels (voice.ts records .m4a).
+const REC_OPTIONS: RecordingOptions = { ...RecordingPresets.HIGH_QUALITY, isMeteringEnabled: true }
 
 export default function Chat() {
   const msgs = useStore(messages)
@@ -114,12 +126,17 @@ export default function Chat() {
   const [optionSheet, setOptionSheet] = useState<{ command: string; allowText: boolean } | null>(null)
   const listRef = useRef<FlatList>(null)
   const insets = useSafeAreaInsets()
-  const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY)
+  const recorder = useAudioRecorder(REC_OPTIONS)
   const [recording, setRecording] = useState(false)
   const [recSecs, setRecSecs] = useState(0)
   const voiceState = useStore(voiceBusy)
   const recTimer = useRef<ReturnType<typeof setInterval> | null>(null)
   const slashSeq = useRef(0)
+  // Composer attachments (ChatGPT-style chips). Memory-only — queued ones
+  // ride chat.ts's in-memory map keyed by the queued send id.
+  const [pendingAttachments, setPendingAttachments] = useState<PendingAttachment[]>([])
+  // The ChatGPT-style attach action sheet (library / camera / file).
+  const [attachOpen, setAttachOpen] = useState(false)
 
   useFocusEffect(
     useCallback(() => {
@@ -343,19 +360,122 @@ export default function Chat() {
     }
   }
 
+  // ── Attachments ────────────────────────────────────────────────────────
+  // ChatGPT's attach flow: + opens a three-way action sheet (library /
+  // camera / file); picks land as preview chips. The size gates run at BOTH
+  // ends: non-image picks over the 8 MB cap are rejected here (hours of 3
+  // kB/s link otherwise), images ride the JPEG ladder inside the send (an
+  // over-cap ORIGINAL still shrinks to the 1.8 MB auto-approve budget), and
+  // processAttachments re-checks the cap defensively before uploading.
+  const canAttach = online && !recording && !(steerMode && busy) // steer is text-only
+  const addAttachment = (att: PendingAttachment) => {
+    if (att.kind !== 'image' && att.size != null && att.size > ATTACH_MAX_BYTES) {
+      Alert.alert(
+        'Attachment too large',
+        `${att.name} is ${formatBytes(att.size)} — the limit is ${formatBytes(ATTACH_MAX_BYTES)}.`,
+      )
+      return
+    }
+    setPendingAttachments((cur) => {
+      if (cur.length >= MAX_ATTACHMENTS) {
+        Alert.alert('Attachment limit', `Up to ${MAX_ATTACHMENTS} files per message.`)
+        return cur
+      }
+      return [...cur, att]
+    })
+  }
+
+  const pickAsset = (a: ImagePicker.ImagePickerAsset) => {
+    const isVideo = a.type === 'video'
+    const kind: PendingAttachment['kind'] = isVideo ? 'video' : 'image'
+    addAttachment({
+      id: `att${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+      kind,
+      uri: a.uri,
+      name: a.fileName ?? (isVideo ? `video-${Date.now()}.mp4` : `photo-${Date.now()}.jpg`),
+      size: a.fileSize ?? undefined,
+      mime: a.mimeType ?? undefined,
+      width: a.width,
+      height: a.height,
+      state: 'pick',
+    })
+  }
+
+  const pickFromLibrary = async () => {
+    try {
+      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync()
+      if (!perm.granted) {
+        Alert.alert('Photos denied', 'Allow photo access to attach images.')
+        return
+      }
+      const r = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images', 'videos'] })
+      if (!r.canceled && r.assets?.length) pickAsset(r.assets[0])
+    } catch (e) {
+      Alert.alert('Picker failed', e instanceof Error ? e.message : String(e))
+    }
+  }
+
+  const takePhoto = async () => {
+    try {
+      const perm = await ImagePicker.requestCameraPermissionsAsync()
+      if (!perm.granted) {
+        Alert.alert('Camera denied', 'Allow camera access to take photos.')
+        return
+      }
+      const r = await ImagePicker.launchCameraAsync()
+      if (!r.canceled && r.assets?.length) pickAsset(r.assets[0])
+    } catch (e) {
+      Alert.alert('Camera failed', e instanceof Error ? e.message : String(e))
+    }
+  }
+
+  const pickFile = async () => {
+    try {
+      const r = await DocumentPicker.getDocumentAsync({ type: '*/*', copyToCacheDirectory: true })
+      if (r.canceled || !r.assets?.length) return
+      const f = r.assets[0]
+      const inferred = mediaKindForPath(f.name)
+      const kind: PendingAttachment['kind'] =
+        inferred === 'unknown' || inferred === 'file' ? 'file' : inferred
+      addAttachment({
+        id: `att${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+        kind,
+        uri: f.uri,
+        name: f.name,
+        size: f.size ?? undefined,
+        mime: f.mimeType ?? undefined,
+        state: 'pick',
+      })
+    } catch (e) {
+      Alert.alert('Picker failed', e instanceof Error ? e.message : String(e))
+    }
+  }
+
+  const openAttachSheet = () => {
+    if (!canAttach) return
+    setAttachOpen(true)
+  }
+
+  /** Chips update in place as the attach pipeline progresses. */
+  const patchAttachment = useCallback((id: string, patch: Partial<PendingAttachment>) => {
+    setPendingAttachments((cur) => cur.map((a) => (a.id === id ? { ...a, ...patch } : a)))
+  }, [])
+
   const send = async () => {
+    if (recording) return // finishing the take wins over sending
     const text = input.trim()
-    if (!text) return
+    if (!text && pendingAttachments.length === 0) return
     // Whatever this dispatch turns into (turn, steer, queued message), the
     // user's eye belongs at the newest message.
     jumpToLatest()
-    if (text.startsWith('/')) {
+    if (text.startsWith('/') && pendingAttachments.length === 0) {
       updateInput('')
       await runSlash(text)
       return
     }
     // Steer mode is the explicit "inject NOW" path; everything else sent
     // mid-turn queues (harness-style) and goes out when the turn ends.
+    // Steer is text-only — the attach button is gated off in steer mode.
     if (steerMode && busy) {
       updateInput('')
       setSteerMode(false)
@@ -372,21 +492,35 @@ export default function Chat() {
     }
     if (busy) {
       if (!storedId) return // nowhere to queue yet — keep the text
-      if (!enqueueSend(storedId, text)) {
+      // Attachment-only sends queue with empty text (allowEmpty); the chips
+      // ride the in-memory attach map keyed by the queued id.
+      const item = enqueueSend(storedId, text, { allowEmpty: pendingAttachments.length > 0 })
+      if (!item) {
         Alert.alert('Queue full', 'Remove a queued message or wait for the current reply to finish.')
         return
       }
+      setQueuedAttachments(item.id, pendingAttachments)
+      setPendingAttachments([])
       updateInput('')
       void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
       return
     }
     try {
+      // Keep the chips visible through the upload — their state machine
+      // (preparing → uploading → ready/failed) tracks the attach pipeline.
       updateInput('')
       // Fire-and-forget: don't delay the user bubble on the haptics bridge.
       void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
-      await sendPrompt(text)
+      const sentIds = new Set(pendingAttachments.map((a) => a.id))
+      await sendPrompt(text, { attachments: pendingAttachments, onAttachment: patchAttachment })
+      // Clear only THIS send's chips — anything added mid-upload stays.
+      setPendingAttachments((cur) => cur.filter((a) => !sentIds.has(a.id)))
     } catch (e) {
       updateInput(text)
+      // Chips stay in the strip, reset to re-sendable — anything the failed
+      // attempt had attached was detached server-side, so a re-send cannot
+      // duplicate attachments.
+      setPendingAttachments((cur) => cur.map((a) => ({ ...a, state: 'pick' as const, error: undefined, path: undefined })))
       Alert.alert('Send failed', e instanceof Error ? e.message : 'unknown')
     }
   }
@@ -416,12 +550,21 @@ export default function Chat() {
     }
     try {
       await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
-      const { transcript, provider } = await transcribeRecording(uri)
+      const { transcript } = await transcribeRecording(uri)
+      // The transcript landing in the composer IS the success feedback — a
+      // dialog here was a tap-to-dismiss speed bump on every voice note.
       updateInput(transcript)
-      if (provider) Alert.alert(`Transcribed (${provider})`, 'Review and send.')
     } catch (e) {
       Alert.alert('Transcription failed', e instanceof Error ? e.message : 'unknown')
     }
+  }
+
+  /** Stop and throw the take away — the strip's ✕. */
+  const cancelRecording = async () => {
+    stopRecTimer()
+    setRecording(false)
+    try { await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light) } catch {}
+    try { await recorder.stop() } catch {}
   }
 
   const toggleRecord = async () => {
@@ -479,7 +622,8 @@ export default function Chat() {
     })
   })()
 
-  const canSend = !!input.trim()
+  // Text OR attachments — ChatGPT sends captionless photos.
+  const canSend = !recording && (!!input.trim() || pendingAttachments.length > 0)
   const isSlashMode = slashQuery !== null
   const cmdCount = slashItems?.filter((i) => i.kind !== 'skill').length ?? 0
   const skillCount = slashItems?.filter((i) => i.kind === 'skill').length ?? 0
@@ -521,7 +665,12 @@ export default function Chat() {
       msgs
         .map((m) => {
           const thinkChars = m.segments?.reduce((n, seg) => n + (seg.kind === 'thinking' ? seg.text.length : 0), 0) ?? 0
-          return `${m.id}:${m.text.length}:${thinkChars}:${m.segments?.length ?? 0}:${m.streaming ? 's' : ''}:${m.status ?? ''}`
+          // Media contributes its COUNT only: upload progress/error lives in
+          // the mediaState nanostores (per cache key), never here — putting
+          // mutable media state in extraData would rebuild this on every tick
+          // and tear down the memo contract.
+          const mediaCount = m.segments?.reduce((n, seg) => n + (seg.kind === 'media' ? 1 : 0), 0) ?? 0
+          return `${m.id}:${m.text.length}:${thinkChars}:${m.segments?.length ?? 0}:${mediaCount}:${m.streaming ? 's' : ''}:${m.status ?? ''}`
         })
         .join('|') + (showThinking ? ':T' : ':F'),
     [msgs, showThinking],
@@ -906,23 +1055,61 @@ export default function Chat() {
                     {busy ? 'sends when this reply finishes' : online ? 'sending…' : 'waiting for connection'}
                   </Text>
                 </View>
-                {queued.slice(0, 3).map((q) => (
+                {queued.slice(0, 3).map((q) => {
+                  // Edit/remove drop the queued item's attachments (memory-
+                  // only, keyed by queued id — see chat.ts): edit moves them
+                  // back into the composer, remove drops them. Steer is
+                  // HIDDEN for attachment-only items: steerRun no-ops on
+                  // empty text, so a handler that deletes before steering
+                  // would destroy the message with no steer sent and no
+                  // requeue.
+                  const editQueued = () => {
+                    const atts = takeQueuedAttachments(q.id)
+                    removeQueued(storedId, q.id)
+                    updateInput(q.text)
+                    if (atts.length) {
+                      setPendingAttachments((cur) => {
+                        // The composer cap still applies when it already holds
+                        // chips — the overflow is dropped with a heads-up
+                        // (the queued item itself is already gone either way).
+                        const room = Math.max(0, MAX_ATTACHMENTS - cur.length)
+                        if (atts.length > room) {
+                          Alert.alert('Attachment limit', `Only ${room} of ${atts.length} attachments fit this message.`)
+                        }
+                        return [...cur, ...atts.slice(0, room)]
+                      })
+                    }
+                  }
+                  const dropQueued = () => {
+                    takeQueuedAttachments(q.id)
+                    removeQueued(storedId, q.id)
+                  }
+                  return (
                   <View key={q.id} style={s.queueRow}>
                     <Pressable
                       style={({ pressed }) => [s.queueMsg, pressed && s.btnPressed]}
-                      onPress={() => { updateInput(q.text); removeQueued(storedId, q.id) }}
+                      onPress={editQueued}
                       accessibilityLabel={`Edit queued message: ${q.text.slice(0, 60)}`}
                     >
-                      <Text style={s.queueMsgText} numberOfLines={1}>{q.text}</Text>
+                      <Text style={s.queueMsgText} numberOfLines={1}>{q.text || '(attachment)'}</Text>
                     </Pressable>
-                    {busy ? (
+                    {busy && q.text.trim() ? (
                       <Pressable
                         style={({ pressed }) => [s.queueAct, pressed && s.btnPressed]}
                         onPress={() => {
+                          const atts = takeQueuedAttachments(q.id)
                           removeQueued(storedId, q.id)
                           jumpToLatest()
-                          // If the steer fails, keep the text queued rather than losing it.
-                          steerRun(q.text).catch(() => { if (!enqueueSend(storedId, q.text)) updateInput(q.text) })
+                          // If the steer fails, put the whole item back —
+                          // text AND media, re-keyed to the fresh entry.
+                          steerRun(q.text).catch(() => {
+                            const item = enqueueSend(storedId, q.text)
+                            if (item) {
+                              if (atts.length) setQueuedAttachments(item.id, atts)
+                            } else {
+                              updateInput(q.text)
+                            }
+                          })
                         }}
                         hitSlop={6}
                         accessibilityLabel="Send this now as a steer"
@@ -932,47 +1119,76 @@ export default function Chat() {
                     ) : null}
                     <Pressable
                       style={({ pressed }) => [s.queueAct, pressed && s.btnPressed]}
-                      onPress={() => removeQueued(storedId, q.id)}
+                      onPress={dropQueued}
                       hitSlop={6}
                       accessibilityLabel="Remove queued message"
                     >
                       <Ionicons name="close" size={14} color={C.textDim} />
                     </Pressable>
                   </View>
-                ))}
+                  )
+                })}
                 {queued.length > 3 ? <Text style={s.queueMore}>+{queued.length - 3} more</Text> : null}
               </View>
             ) : null}
 
+            {/* Attachment preview chips — between the queue strip and the pill.
+                States live on each PendingAttachment; the elapsed/estimate
+                timer is inside AttachmentChip. */}
+            {pendingAttachments.length > 0 ? (
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.chipStrip} keyboardShouldPersistTaps="handled">
+                {pendingAttachments.map((att) => (
+                  <AttachmentChip
+                    key={att.id}
+                    att={att}
+                    onRemove={() => setPendingAttachments((cur) => cur.filter((a) => a.id !== att.id))}
+                    onRetry={() =>
+                      // "Retry" a failed chip = make it sendable again: the
+                      // pipeline reruns on the next send (a failed attempt
+                      // detached anything it had attached, so no duplicates).
+                      patchAttachment(att.id, { state: 'pick' as const, error: undefined, path: undefined })
+                    }
+                  />
+                ))}
+              </ScrollView>
+            ) : null}
+
             <View style={s.composer}>
               <Pressable
-                style={({ pressed }) => [s.attach, pressed && s.btnPressed]}
-                onPress={() => Alert.alert('Attachments', 'Send an image or file and Hermes will pick it up.')}
+                style={({ pressed }) => [s.attach, !canAttach && s.attachOff, pressed && s.btnPressed]}
+                onPress={openAttachSheet}
+                disabled={!canAttach}
                 hitSlop={8}
-                accessibilityLabel="Add attachment"
+                accessibilityLabel={canAttach ? 'Add attachment' : steerMode && busy ? 'Attachments unavailable in steer mode' : 'Attachments unavailable offline'}
               >
-                <Ionicons name="add" size={22} color={C.textDim} />
+                <Ionicons name={canAttach ? 'add' : 'add-circle-outline'} size={22} color={canAttach ? C.textDim : C.border} />
               </Pressable>
 
-              <TextInput
-                style={s.input}
-                value={input}
-                onChangeText={updateInput}
-                placeholder={
-                  isSlashMode
-                    ? 'Filter commands…'
-                    : steerMode && busy
-                      ? 'Steer the running task…'
-                      : busy
-                        ? 'Reply — queued until it finishes'
-                        : 'Ask Hermes'
-                }
-                placeholderTextColor={C.textFaint}
-                multiline={Platform.OS !== 'web'}
-                returnKeyType="send"
-                onSubmitEditing={() => { if (Platform.OS === 'web') void send() }}
-                accessibilityLabel="Message input"
-              />
+              {recording ? (
+                <VoiceRecStrip recorder={recorder} secs={recSecs} onCancel={() => { void cancelRecording() }} />
+              ) : (
+                <TextInput
+                  style={s.input}
+                  value={input}
+                  onChangeText={updateInput}
+                  placeholder={
+                    isSlashMode
+                      ? 'Filter commands…'
+                      : voiceState === 'transcribing'
+                        ? 'Transcribing…'
+                        : steerMode && busy
+                          ? 'Steer the running task…'
+                          : busy
+                            ? 'Reply — queued until it finishes'
+                            : 'Ask Hermes'
+                  }
+                  placeholderTextColor={C.textFaint}
+                  multiline={Platform.OS !== 'web'}
+                  returnKeyType="send"
+                  onSubmitEditing={() => { if (Platform.OS === 'web') void send() }}
+                  accessibilityLabel="Message input"
+                />
+              )}
 
               {busy ? (
                 <Pressable
@@ -1027,7 +1243,14 @@ export default function Chat() {
             ) : null}
           </View>
 
-          {/* Interactive pickers — /model, options/mixed commands, and the command browser */}
+          {/* Interactive pickers — attach sources, /model, options/mixed commands, and the command browser */}
+          <AttachSheet
+            visible={attachOpen}
+            onClose={() => setAttachOpen(false)}
+            onLibrary={() => void pickFromLibrary()}
+            onCamera={() => void takePhoto()}
+            onFile={() => void pickFile()}
+          />
           <ModelPickerSheet open={modelPickerOpen} onClose={() => setModelPickerOpen(false)} />
           <CommandCatalogSheet
             open={catalogOpen}
@@ -1155,6 +1378,7 @@ const s = StyleSheet.create({
   clarifyRow: { flexDirection: 'row', gap: 8, marginTop: 10, alignItems: 'center' },
   miniSend: { width: 44, height: 44, borderRadius: 22, backgroundColor: C.accent, alignItems: 'center', justifyContent: 'center' },
   composerWrap: { paddingHorizontal: 12, paddingTop: 6, backgroundColor: C.bg },
+  chipStrip: { maxHeight: 72, marginBottom: 6 },
   composer: {
     flexDirection: 'row',
     alignItems: 'flex-end',
@@ -1167,6 +1391,7 @@ const s = StyleSheet.create({
     paddingVertical: 6,
   },
   attach: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
+  attachOff: { opacity: 0.4 },
   input: { flex: 1, color: C.text, fontSize: 16, maxHeight: 110, minHeight: 34, paddingTop: 7, paddingBottom: 7, paddingHorizontal: 4 },
   iconCircle: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
   recOn: { backgroundColor: C.red },

@@ -12,6 +12,7 @@ import { Ionicons } from '@expo/vector-icons'
 import { speakText, stopTts } from '../lib/voice'
 import { C } from '../lib/theme'
 import { formatThinkMeta, type ChatMessage, type ChatSegment, type ToolItem } from '../lib/chat'
+import { MediaSegmentView } from './media/MediaSegmentView'
 import { CommandCard } from './CommandOutput'
 
 /** A message's renderable content: explicit segments, else its plain text. */
@@ -173,11 +174,18 @@ export const MessageBubble = React.memo(function MessageBubble({
     const lastIdx = segs.length - 1
     // What the user can actually see — hidden thinking doesn't count as
     // content, or the "working" dots would never show while it runs quiet.
-    const hasVisibleText = (showThinking ? segs : segs.filter((seg) => seg.kind !== 'thinking')).some((seg) => seg.text.trim())
+    // Only TEXT segments count: media segments carry text: '' (calling
+    // .trim() over them was a crash on undefined-to-string before that
+    // invariant existed, and would still miscount media as words).
+    const hasVisibleText = (showThinking ? segs : segs.filter((seg) => seg.kind !== 'thinking')).some(
+      (seg) => seg.kind === 'text' && seg.text.trim(),
+    )
     return (
       <View style={s.botWrap}>
         {segs.map((seg, i) =>
-          seg.kind === 'thinking' ? (
+          seg.kind === 'media' ? (
+            <MediaSegmentView key={i} seg={seg} />
+          ) : seg.kind === 'thinking' ? (
             showThinking ? (
               <ThinkingBlock
                 key={i}
@@ -234,18 +242,30 @@ export const MessageBubble = React.memo(function MessageBubble({
     )
   }
 
+  const userSegs = segmentsOf(m)
+  // Media rows are not retryable (design finding 9): the attachments can't be
+  // re-picked from here, so the Retry button hides instead of offering a
+  // no-op that would silently drop the media. The failed row keeps its media
+  // segments — that IS the user's cue to re-attach and resend.
+  const hasMediaSegs = userSegs.some((seg) => seg.kind === 'media')
   return (
     <View style={s.userWrap}>
-      <View style={s.userBubble}>
-        <Text style={s.userText} selectable>
-          {m.text}
-        </Text>
+      <View style={[s.userBubble, hasMediaSegs && s.userBubbleMedia]}>
+        {userSegs.map((seg, i) =>
+          seg.kind === 'media' ? (
+            <MediaSegmentView key={i} seg={seg} />
+          ) : seg.text ? (
+            <Text key={i} style={s.userText} selectable>
+              {seg.text}
+            </Text>
+          ) : null,
+        )}
       </View>
       {m.status === 'failed' ? (
         <View style={s.failedRow}>
           <Ionicons name="alert-circle" size={15} color={C.red} />
           <Text style={s.failedText}>{m.error ?? 'Not sent'}</Text>
-          {onRetry ? (
+          {onRetry && !hasMediaSegs ? (
             <Pressable
               onPress={() => onRetry(m.id)}
               style={({ pressed }) => [s.retryBtn, pressed && s.iconPressed]}
@@ -348,6 +368,9 @@ const s = StyleSheet.create({
   botWrap: { paddingHorizontal: 16, paddingVertical: 10 },
   userWrap: { paddingHorizontal: 16, paddingVertical: 6, alignItems: 'flex-end' },
   userBubble: { backgroundColor: C.userBubble, borderRadius: 20, paddingHorizontal: 16, paddingVertical: 10, maxWidth: '88%' },
+  // Media rows: the photo/doc sits flush inside the bubble like ChatGPT's —
+  // tighter padding, no double-inset around the media tiles.
+  userBubbleMedia: { paddingHorizontal: 6, paddingVertical: 6, gap: 6 },
   userText: { color: C.text, fontSize: 16, lineHeight: 23 },
   streamText: { color: C.text, fontSize: 16, lineHeight: 24 },
   cursor: { color: C.textDim, fontSize: 15, marginTop: 2 },

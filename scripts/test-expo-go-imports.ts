@@ -50,7 +50,7 @@ function stub(name: string, value: unknown): void {
 // Metro/RN globals the bundle relies on.
 ;(globalThis as Record<string, unknown>).__DEV__ = true
 
-stub('expo', { isRunningInExpoGo: () => true })
+stub('expo', { isRunningInExpoGo: () => true, useEvent: () => ({ status: 'idle' }), useEventListener: () => {} })
 stub('expo-constants', { default: { expoConfig: null, easConfig: null } })
 stub('expo-device', { isDevice: false })
 stub('react-native', {
@@ -105,9 +105,21 @@ stub('expo-clipboard', { setStringAsync: async () => {} })
 stub('expo-speech', { speak: () => {}, stop: async () => {} })
 stub('expo-audio', { AudioModule: {}, useAudioRecorder: () => ({}), RecordingPresets: {}, createAudioPlayer: () => ({}) })
 stub('expo-camera', { CameraView: () => null, useCameraPermissions: () => ({}) })
-stub('expo-file-system/legacy', { readAsStringAsync: async () => '', EncodingType: { Base64: 'base64' } })
+stub('expo-file-system/legacy', { readAsStringAsync: async () => '', writeAsStringAsync: async () => {}, cacheDirectory: '/cache/', EncodingType: { Base64: 'base64' } })
 stub('expo-file-system', new Proxy({}, { get: () => async () => '' }))
 stub('expo-haptics', { impactAsync: async () => {}, notificationAsync: async () => {}, ImpactFeedbackStyle: {}, NotificationFeedbackType: {} })
+// Media spine (SDK 57 packages the chat screen pulls in at module scope).
+stub('expo-image', { Image: () => null, getCachePathAsync: async () => null })
+stub('expo-image-picker', {
+  launchImageLibraryAsync: async () => ({ canceled: true, assets: [] }),
+  launchCameraAsync: async () => ({ canceled: true, assets: [] }),
+  requestMediaLibraryPermissionsAsync: async () => ({ granted: false }),
+  requestCameraPermissionsAsync: async () => ({ granted: false }),
+})
+stub('expo-document-picker', { getDocumentAsync: async () => ({ canceled: true, assets: [] }) })
+stub('expo-image-manipulator', { ImageManipulator: { manipulate: () => ({ resize: () => ({}), renderAsync: async () => ({}), saveAsync: async () => ({}) }) }, SaveFormat: { JPEG: 'jpeg', PNG: 'png' } })
+stub('expo-video', { VideoView: () => null, useVideoPlayer: () => ({ addListener: () => ({ remove() {} }) }) })
+stub('expo-sharing', { shareAsync: async () => {} })
 stub('react-native-safe-area-context', { SafeAreaView: () => null, useSafeAreaInsets: () => ({ top: 0, bottom: 0 }) })
 stub('react-native-markdown-display', { default: () => null })
 const reactStub: Record<string, unknown> = {

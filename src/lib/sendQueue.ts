@@ -81,6 +81,10 @@ export async function loadSendQueue(): Promise<void> {
       const items = v
         .filter((x): x is QueuedSend =>
           !!x && typeof x === 'object' && typeof (x as QueuedSend).id === 'string' && typeof (x as QueuedSend).text === 'string')
+        // Attachment-only sends queue with empty text, but their attachments
+        // are memory-only (chat.ts owns the map) — after a restart an empty
+        // item has nothing left to send, so it's dropped entirely.
+        .filter((x) => x.text !== '')
         .map((x) => ({ id: x.id, text: x.text.slice(0, MAX_TEXT), ts: Number(x.ts) || Date.now() }))
       if (items.length) map[k] = items.slice(0, MAX_PER_CHAT)
     }
@@ -99,12 +103,18 @@ export function queueFor(storedId: string | null | undefined): QueuedSend[] {
 /**
  * Append a message to a chat's queue. Returns null (and keeps the queue
  * untouched) when the text is empty or the chat is at capacity — the caller
- * decides how to surface that.
+ * decides how to surface that. `allowEmpty` lets attachment-only sends
+ * through with empty text (the attachments live in chat.ts's in-memory map,
+ * keyed by the returned id; storage stays {id,text,ts}).
  */
-export function enqueueSend(storedId: string | null | undefined, rawText: string): QueuedSend | null {
+export function enqueueSend(
+  storedId: string | null | undefined,
+  rawText: string,
+  opts?: { allowEmpty?: boolean },
+): QueuedSend | null {
   if (!storedId) return null
   const text = rawText.trim().slice(0, MAX_TEXT)
-  if (!text) return null
+  if (!text && !opts?.allowEmpty) return null
   const cur = sendQueue.get()[storedId] ?? []
   if (cur.length >= MAX_PER_CHAT) {
     log('warn', 'sendQueue', `queue full for ${storedId}, dropping message`)
