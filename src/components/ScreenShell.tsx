@@ -45,6 +45,8 @@ export function ScreenShell({
   const S = useShape()
   const s = useStyles(makeS)
   const [open, setOpen] = useState(false)
+  // Width of the tray's right control group — insets the centered title.
+  const [rightW, setRightW] = useState(0)
   const router = useRouter()
   const insets = useSafeAreaInsets()
   const online = useStore(isConnectedAtom)
@@ -218,14 +220,21 @@ export function ScreenShell({
   return (
     <View style={s.root}>
       {S.trayHeader ? (
-        // Mocheme tray: the title owns a centered line of its own — it never
-        // fights the model chip for width — and the controls sit below it.
+        // Mocheme tray — one row: the title floats dead-center (absolutely
+        // positioned, inset by the measured controls width so it can never
+        // run under the model chip; onSearch deliberately has no tray
+        // affordance — search lives in the drawer's Chats tab).
         <View style={[s.topBarTray, { paddingTop: insets.top + 8 }]}>
-          <View style={s.trayTitleWrap}>
-            {showBrand ? <Text style={s.trayBrand}>Moch</Text> : null}
-            <Text style={s.trayTitle} numberOfLines={1}>
-              {title}
-            </Text>
+          <View
+            pointerEvents="none"
+            style={[s.trayTitleAbs, { top: insets.top + 8, bottom: 8, paddingLeft: 44, paddingRight: 44 + rightW }]}
+          >
+            <View style={s.trayTitleWrap}>
+              {showBrand ? <Text style={s.trayBrand}>Moch</Text> : null}
+              <Text style={s.trayTitle} numberOfLines={1}>
+                {title}
+              </Text>
+            </View>
           </View>
           <View style={s.trayControls}>
             <Pressable
@@ -237,28 +246,20 @@ export function ScreenShell({
               <Icon name="menu" size={20} color={C.text} />
             </Pressable>
             <View style={s.traySpacer} />
-            {onSearch ? (
+            <View style={s.trayRight} onLayout={(e) => setRightW(e.nativeEvent.layout.width)}>
+              {right}
               <Pressable
-                style={({ pressed }) => [s.trayCircle, pressed && s.circlePressed]}
-                onPress={onSearch}
+                style={s.trayCircle}
                 hitSlop={8}
-                accessibilityLabel="Search chats"
+                accessibilityLabel={online ? 'Connected' : 'Not connected'}
               >
-                <Icon name="search" size={18} color={C.text} />
+                <Icon
+                  name={online ? 'radio-button-on' : 'cloud-offline-outline'}
+                  size={18}
+                  color={online ? C.greenSoft : C.textFaint}
+                />
               </Pressable>
-            ) : null}
-            {right}
-            <Pressable
-              style={s.trayCircle}
-              hitSlop={8}
-              accessibilityLabel={online ? 'Connected' : 'Not connected'}
-            >
-              <Icon
-                name={online ? 'radio-button-on' : 'cloud-offline-outline'}
-                size={18}
-                color={online ? C.greenSoft : C.textFaint}
-              />
-            </Pressable>
+            </View>
           </View>
         </View>
       ) : (
@@ -367,10 +368,12 @@ const makeS = () => StyleSheet.create({
     shadowOffset: { width: 0, height: 6 },
     elevation: 8,
   },
-  trayTitleWrap: { alignItems: 'center', marginBottom: 8, paddingHorizontal: 4 },
+  trayTitleAbs: { position: 'absolute', left: 0, right: 0, alignItems: 'center', justifyContent: 'center' },
+  trayTitleWrap: { alignItems: 'center' },
   trayBrand: { color: C.textFaint, fontSize: 11.5, fontWeight: '700', letterSpacing: 0.5, marginBottom: 1 },
   trayTitle: { color: C.text, fontSize: 16.5, fontWeight: '700' },
-  trayControls: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  trayControls: { flexDirection: 'row', alignItems: 'center' },
+  trayRight: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   traySpacer: { flex: 1 },
   trayCircle: {
     width: 38,
