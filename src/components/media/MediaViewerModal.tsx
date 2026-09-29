@@ -3,6 +3,7 @@ import { Modal, Pressable, ScrollView, StyleSheet, Text, View, Dimensions, type 
 import { Image } from 'expo-image'
 import * as Sharing from 'expo-sharing'
 import { Ionicons } from '@expo/vector-icons'
+import { Icon } from '../Icon'
 import { C, useStyles } from '../../lib/theme'
 import type { ChatSegment } from '../../lib/chat'
 import { imageSource } from '../../lib/mediaCache'
@@ -74,13 +75,13 @@ export function MediaViewerModal({
       <View style={s.scrim}>
         <View style={s.header}>
           <Pressable onPress={onClose} hitSlop={10} accessibilityLabel="Close viewer">
-            <Ionicons name="close" size={22} color={C.text} />
+            <Icon name="close" size={22} color={C.text} />
           </Pressable>
           <Text style={s.name} numberOfLines={1}>
             {seg.name ?? 'Image'}
           </Text>
           <Pressable onPress={() => void share()} hitSlop={10} accessibilityLabel="Share image">
-            {sharing ? <Ionicons name="hourglass-outline" size={20} color={C.textFaint} /> : <Ionicons name="share-outline" size={20} color={C.text} />}
+            {sharing ? <Icon name="hourglass-outline" size={20} color={C.textFaint} /> : <Icon name="share-outline" size={20} color={C.text} />}
           </Pressable>
         </View>
         <ScrollView

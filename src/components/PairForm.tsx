@@ -1,6 +1,7 @@
 import React, { useRef, useState } from 'react'
 import { View, Text, TextInput, Pressable, StyleSheet, ActivityIndicator, Modal } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
+import { Icon } from './Icon'
 import { CameraView, useCameraPermissions } from 'expo-camera'
 import { connect, normalizeHost } from '../lib/gateway'
 import { parseConnectUrl } from '../lib/pairing'
@@ -94,7 +95,7 @@ export function PairForm({ onPaired }: { onPaired: () => void }) {
         accessibilityRole="button"
         accessibilityLabel="Scan pairing QR"
       >
-        <Ionicons name="qr-code-outline" size={22} color={C.onAccent} />
+        <Icon name="qr-code-outline" size={22} color={C.onAccent} />
         <Text style={s.scanText}>Scan QR code</Text>
       </Pressable>
       <Text style={s.scanHint}>On your computer run scripts/hermes-pair.sh —{'\n'}it prints the QR to scan.</Text>
@@ -106,7 +107,7 @@ export function PairForm({ onPaired }: { onPaired: () => void }) {
         accessibilityLabel="More pairing options"
       >
         <Text style={s.moreText}>{showMore ? 'Hide options' : 'More options'}</Text>
-        <Ionicons name={showMore ? 'chevron-up' : 'chevron-down'} size={14} color={C.textFaint} />
+        <Icon name={showMore ? 'chevron-up' : 'chevron-down'} size={14} color={C.textFaint} />
       </Pressable>
 
       {showMore ? (

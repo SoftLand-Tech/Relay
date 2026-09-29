@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import { Linking, Pressable, StyleSheet, Text, View } from 'react-native'
 import * as Sharing from 'expo-sharing'
 import { Ionicons } from '@expo/vector-icons'
+import { Icon } from '../Icon'
 import { useStore } from '@nanostores/react'
 import { C, useStyles } from '../../lib/theme'
 import type { ChatSegment } from '../../lib/chat'
@@ -76,7 +77,7 @@ export function FileCard({ seg }: { seg: ChatSegment }) {
           loading ? ', downloading' : localUri ? ', tap to open' : ', tap to download'
         }`}
       >
-        <Ionicons name={fileIconForPath(seg.name ?? seg.path ?? '') as keyof typeof Ionicons.glyphMap} size={22} color={C.accent} />
+        <Icon name={fileIconForPath(seg.name ?? seg.path ?? '') as keyof typeof Ionicons.glyphMap} size={22} color={C.accent} />
         <View style={s.meta}>
           <Text style={s.name} numberOfLines={1}>{seg.name ?? seg.path?.split('/').pop() ?? 'File'}</Text>
           <Text style={s.sub}>
@@ -86,7 +87,7 @@ export function FileCard({ seg }: { seg: ChatSegment }) {
         </View>
         {localUri && !loading ? (
           <Pressable onPress={() => void share()} hitSlop={8} accessibilityLabel="Share file">
-            {sharing ? <Ionicons name="hourglass-outline" size={16} color={C.textFaint} /> : <Ionicons name="share-outline" size={16} color={C.textDim} />}
+            {sharing ? <Icon name="hourglass-outline" size={16} color={C.textFaint} /> : <Icon name="share-outline" size={16} color={C.textDim} />}
           </Pressable>
         ) : null}
       </Pressable>
@@ -97,9 +98,9 @@ export function FileCard({ seg }: { seg: ChatSegment }) {
       ) : null}
       {errorMsg && !loading ? (
         <Pressable style={({ pressed }) => [s.errorRow, pressed && s.pressed]} onPress={() => void fetchThen()} accessibilityLabel="Retry download">
-          <Ionicons name="alert-circle" size={14} color={C.red} />
+          <Icon name="alert-circle" size={14} color={C.red} />
           <Text style={s.errorText} numberOfLines={1}>{errorMsg}</Text>
-          <Ionicons name="refresh" size={14} color={C.accent} />
+          <Icon name="refresh" size={14} color={C.accent} />
         </Pressable>
       ) : null}
     </View>

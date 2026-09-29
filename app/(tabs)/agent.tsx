@@ -3,6 +3,7 @@ import { View, Text, Pressable, ScrollView, StyleSheet, ActivityIndicator, Alert
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useStore } from '@nanostores/react'
 import { Ionicons } from '@expo/vector-icons'
+import { Icon } from '../../src/components/Icon'
 import { rpc, isConnected as isConnectedAtom, retryNow } from '../../src/lib/gateway'
 import { activeSession, ensureSession } from '../../src/lib/chat'
 import { liveModel, liveProvider, fetchModelOptions, liveReasoningDisplay } from '../../src/lib/modelState'
@@ -113,7 +114,7 @@ export default function Controls() {
             </Text>
           </View>
           <View style={s.modelChevron}>
-            <Ionicons name="options-outline" size={16} color={C.accent} />
+            <Icon name="options-outline" size={16} color={C.accent} />
             <Text style={s.modelChevronText}>CHANGE</Text>
           </View>
         </Pressable>

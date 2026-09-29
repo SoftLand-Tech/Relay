@@ -3,6 +3,7 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-nati
 import { VideoView, useVideoPlayer } from 'expo-video'
 import { useEvent } from 'expo'
 import { Ionicons } from '@expo/vector-icons'
+import { Icon } from '../Icon'
 import { C, useStyles } from '../../lib/theme'
 import type { ChatSegment } from '../../lib/chat'
 import { probeDownloadError, videoSource } from '../../lib/mediaCache'
@@ -53,7 +54,7 @@ export function VideoBubble({ seg }: { seg: ChatSegment }) {
       accessibilityLabel={`Play video${seg.name ? `: ${seg.name}` : ''}`}
     >
       <View style={s.playCircle}>
-        <Ionicons name="play" size={16} color={C.onAccent} />
+        <Icon name="play" size={16} color={C.onAccent} />
       </View>
       <View style={s.meta}>
         <Text style={s.name} numberOfLines={1}>{seg.name ?? 'Video'}</Text>
@@ -110,9 +111,9 @@ function VideoPlayerMount({
         onPress={onRetry}
         accessibilityLabel="Retry video"
       >
-        <Ionicons name="alert-circle" size={16} color={C.red} />
+        <Icon name="alert-circle" size={16} color={C.red} />
         <Text style={s.errorText} numberOfLines={1}>{errMsg}</Text>
-        <Ionicons name="refresh" size={14} color={C.accent} />
+        <Icon name="refresh" size={14} color={C.accent} />
       </Pressable>
     )
   }

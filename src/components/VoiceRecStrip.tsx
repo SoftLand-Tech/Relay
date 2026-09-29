@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { View, Text, Pressable, StyleSheet, Animated, AccessibilityInfo } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
+import { Icon } from './Icon'
 import type { AudioRecorder } from 'expo-audio'
 import { C, useStyles } from '../lib/theme'
 import { REC_POLL_MS, pushLevel, barsFromLevels, formatRecSecs } from '../lib/voiceLevels'
@@ -87,7 +88,7 @@ export const VoiceRecStrip = React.memo(function VoiceRecStrip({
         hitSlop={8}
         accessibilityLabel="Discard recording"
       >
-        <Ionicons name="close" size={17} color={C.textDim} />
+        <Icon name="close" size={17} color={C.textDim} />
       </Pressable>
     </View>
   )

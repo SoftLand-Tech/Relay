@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native'
 import { Image } from 'expo-image'
 import { Ionicons } from '@expo/vector-icons'
+import { Icon } from '../Icon'
 import { C, useStyles } from '../../lib/theme'
 import { ATTACH_RATE_KBPS, estSecondsFor, formatBytes, formatDuration, mediaKindForPath } from '../../lib/media'
 import type { PendingAttachment } from '../../lib/mediaSend'
@@ -52,7 +53,7 @@ export function AttachmentChip({
         <Image source={{ uri: att.uri }} style={s.thumb} contentFit="cover" transition={100} />
       ) : (
         <View style={s.thumb}>
-          <Ionicons name={att.kind === 'video' ? 'videocam-outline' : att.kind === 'audio' ? 'musical-notes-outline' : 'document-attach-outline'} size={16} color={C.textDim} />
+          <Icon name={att.kind === 'video' ? 'videocam-outline' : att.kind === 'audio' ? 'musical-notes-outline' : 'document-attach-outline'} size={16} color={C.textDim} />
         </View>
       )}
       <View style={s.meta}>
@@ -64,11 +65,11 @@ export function AttachmentChip({
       {active ? <ActivityIndicator size="small" color={C.accent} /> : null}
       {att.state === 'failed' && onRetry ? (
         <Pressable onPress={onRetry} hitSlop={6} accessibilityLabel="Retry attachment">
-          <Ionicons name="refresh" size={14} color={C.accent} />
+          <Icon name="refresh" size={14} color={C.accent} />
         </Pressable>
       ) : null}
       <Pressable onPress={onRemove} hitSlop={6} accessibilityLabel={`Remove ${att.name}`}>
-        <Ionicons name="close" size={14} color={C.textDim} />
+        <Icon name="close" size={14} color={C.textDim} />
       </Pressable>
     </View>
   )

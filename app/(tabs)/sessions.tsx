@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { View, Text, FlatList, Pressable, TextInput, StyleSheet, RefreshControl, Alert } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
+import { Icon } from '../../src/components/Icon'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useStore } from '@nanostores/react'
 import { router } from 'expo-router'
@@ -153,7 +154,7 @@ function SessionsInner() {
             onPress={startNew}
             accessibilityLabel="New chat"
           >
-            <Ionicons name="add" size={20} color={C.onAccent} />
+            <Icon name="add" size={20} color={C.onAccent} />
           </Pressable>
         </View>
 

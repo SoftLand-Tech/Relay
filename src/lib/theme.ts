@@ -103,6 +103,9 @@ export interface Shape {
   drawerRoundedCap: boolean
   /** The header model chip washes with accentSoft. */
   modelChipTint: boolean
+  /** Core UI glyphs render from Mochi's hand-drawn set (mochi-icons/) instead
+   *  of Ionicons — Icon.tsx falls back per-name for unmapped glyphs. */
+  mochiIcons: boolean
   askPlaceholder: string
 }
 
@@ -204,6 +207,7 @@ const MOHEME_SHAPE: Shape = {
   dashedThinking: true,
   drawerRoundedCap: true,
   modelChipTint: true,
+  mochiIcons: true,
   askPlaceholder: 'Ask Mochi…',
 }
 
@@ -221,6 +225,7 @@ const RELAY_SHAPE: Shape = {
   dashedThinking: false,
   drawerRoundedCap: false,
   modelChipTint: false,
+  mochiIcons: false,
   askPlaceholder: 'Ask Hermes',
 }
 

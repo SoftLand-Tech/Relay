@@ -9,6 +9,7 @@ import Markdown from '@ronradtke/react-native-markdown-display'
 import * as Clipboard from 'expo-clipboard'
 import * as Speech from 'expo-speech'
 import { Ionicons } from '@expo/vector-icons'
+import { Icon } from './Icon'
 import { speakText, stopTts } from '../lib/voice'
 import { C, S, useStyles, useShape } from '../lib/theme'
 import { formatThinkMeta, type ChatMessage, type ChatSegment, type ToolItem } from '../lib/chat'
@@ -223,7 +224,7 @@ export const MessageBubble = React.memo(function MessageBubble({
         {m.streaming ? (hasVisibleText ? <Text style={s.cursor}>▍</Text> : <ThinkingDots />) : null}
         {m.status === 'failed' ? (
           <View style={s.failedRow}>
-            <Ionicons name="alert-circle" size={15} color={C.red} />
+            <Icon name="alert-circle" size={15} color={C.red} />
             <Text style={s.failedText}>{m.error ?? 'Something went wrong'}</Text>
           </View>
         ) : null}
@@ -236,7 +237,7 @@ export const MessageBubble = React.memo(function MessageBubble({
               style={({ pressed }) => [s.iconBtn, pressed && s.iconPressed]}
               accessibilityLabel="Copy message"
             >
-              <Ionicons name={copied ? 'checkmark' : 'copy-outline'} size={15} color={copied ? C.greenSoft : C.textFaint} />
+              <Icon name={copied ? 'checkmark' : 'copy-outline'} size={15} color={copied ? C.greenSoft : C.textFaint} />
             </Pressable>
             <Pressable
               onPress={() => { void toggleSpeak() }}
@@ -247,7 +248,7 @@ export const MessageBubble = React.memo(function MessageBubble({
               {speakState === 'loading' ? (
                 <ActivityIndicator color={C.textFaint} size="small" />
               ) : (
-                <Ionicons name={speakState === 'playing' ? 'stop' : 'volume-medium-outline'} size={16} color={speakState === 'playing' ? C.text : C.textFaint} />
+                <Icon name={speakState === 'playing' ? 'stop' : 'volume-medium-outline'} size={16} color={speakState === 'playing' ? C.text : C.textFaint} />
               )}
             </Pressable>
           </View>
@@ -278,7 +279,7 @@ export const MessageBubble = React.memo(function MessageBubble({
       </View>
       {m.status === 'failed' ? (
         <View style={s.failedRow}>
-          <Ionicons name="alert-circle" size={15} color={C.red} />
+          <Icon name="alert-circle" size={15} color={C.red} />
           <Text style={s.failedText}>{m.error ?? 'Not sent'}</Text>
           {onRetry && !hasMediaSegs ? (
             <Pressable
@@ -286,7 +287,7 @@ export const MessageBubble = React.memo(function MessageBubble({
               style={({ pressed }) => [s.retryBtn, pressed && s.iconPressed]}
               accessibilityLabel="Retry send"
             >
-              <Ionicons name="refresh" size={13} color={C.text} />
+              <Icon name="refresh" size={13} color={C.text} />
               <Text style={s.retryText}>Retry</Text>
             </Pressable>
           ) : null}
@@ -336,7 +337,7 @@ export const ThinkingBlock = React.memo(function ThinkingBlock({
       style={({ pressed }) => [s.think, pressed && s.iconPressed]}
     >
       <View style={s.thinkHead}>
-        <Ionicons name={open ? 'chevron-down' : 'chevron-forward'} size={12} color={C.textFaint} />
+        <Icon name={open ? 'chevron-down' : 'chevron-forward'} size={12} color={C.textFaint} />
         {live ? <ThinkingDots /> : null}
         <Text style={s.thinkLabel}>
           {live ? 'Thinking' : 'Thought'}
@@ -368,7 +369,7 @@ export const ToolRow = React.memo(function ToolRow({ t }: { t: ToolItem }) {
       {t.status === 'running' ? (
         <ActivityIndicator size="small" color={color} style={{ width: 14 }} />
       ) : (
-        <Ionicons name={t.status === 'failed' ? 'close' : 'checkmark'} size={13} color={color} />
+        <Icon name={t.status === 'failed' ? 'close' : 'checkmark'} size={13} color={color} />
       )}
       <Text style={s.toolName}>{t.name}</Text>
       {t.preview ? (

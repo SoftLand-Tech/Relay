@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { computed } from 'nanostores'
 import { useStore } from '@nanostores/react'
 import { Ionicons } from '@expo/vector-icons'
+import { Icon } from '../../src/components/Icon'
 import * as Clipboard from 'expo-clipboard'
 import * as Haptics from 'expo-haptics'
 import { router } from 'expo-router'
@@ -55,7 +56,7 @@ function Row({
   const body = (
     <View style={[s.rowInner, !onPress && { minHeight: 52 }]}>
       <View style={[s.rowIcon, danger && s.rowIconDanger]}>
-        <Ionicons name={icon} size={16} color={danger ? C.red : C.accent} />
+        <Icon name={icon} size={16} color={danger ? C.red : C.accent} />
       </View>
       <View style={s.rowText}>
         <Text style={[s.rowLabel, disabled && s.rowLabelDisabled, danger && { color: C.red }]} numberOfLines={1}>
@@ -64,7 +65,7 @@ function Row({
         {sub ? <Text style={s.rowSub} numberOfLines={2}>{sub}</Text> : null}
       </View>
       {right}
-      {chevron && !right ? <Ionicons name="chevron-forward" size={15} color={C.textFaint} /> : null}
+      {chevron && !right ? <Icon name="chevron-forward" size={15} color={C.textFaint} /> : null}
     </View>
   )
   if (!onPress) return <View style={{ opacity: disabled ? 0.5 : 1 }}>{body}</View>
@@ -106,7 +107,7 @@ function ThemeCard({ id, name, desc, swatches, onPick }: {
     >
       {active ? (
         <View style={s.themeCheck}>
-          <Ionicons name="checkmark" size={13} color={C.onAccent} />
+          <Icon name="checkmark" size={13} color={C.onAccent} />
         </View>
       ) : null}
       <Text style={s.themeName}>{name}</Text>
@@ -252,7 +253,7 @@ function SettingsInner() {
                       ])}
                       accessibilityLabel={`Forget ${sv.name}`}
                     >
-                      <Ionicons name="trash-outline" size={16} color={C.red} />
+                      <Icon name="trash-outline" size={16} color={C.red} />
                     </Pressable>
                   </View>
                 </React.Fragment>
@@ -292,7 +293,7 @@ function SettingsInner() {
         <Section title="NOTIFICATIONS">
           <View style={s.toggleRow}>
             <View style={[s.rowIcon]}>
-              <Ionicons name="notifications-outline" size={16} color={C.accent} />
+              <Icon name="notifications-outline" size={16} color={C.accent} />
             </View>
             <View style={s.rowText}>
               <Text style={s.rowLabel}>Notifications</Text>

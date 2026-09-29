@@ -9,6 +9,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { Modal, View, Text, Pressable, TextInput, ScrollView, StyleSheet, ActivityIndicator, KeyboardAvoidingView, Platform, Alert } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
+import { Icon } from './Icon'
 import * as Haptics from 'expo-haptics'
 import { useStore } from '@nanostores/react'
 import {
@@ -190,7 +191,7 @@ export function ModelPickerSheet({ open, onClose }: { open: boolean; onClose: ()
                 onPress={() => (step === 'scope' ? setStep('model') : setStep('provider'))}
                 accessibilityLabel="Back"
               >
-                <Ionicons name="chevron-back" size={20} color={C.textDim} />
+                <Icon name="chevron-back" size={20} color={C.textDim} />
               </Pressable>
             ) : null}
             <View style={{ flex: 1 }}>
@@ -205,7 +206,7 @@ export function ModelPickerSheet({ open, onClose }: { open: boolean; onClose: ()
               onPress={onClose}
               accessibilityLabel="Close"
             >
-              <Ionicons name="close" size={20} color={C.textDim} />
+              <Icon name="close" size={20} color={C.textDim} />
             </Pressable>
           </View>
 
@@ -218,7 +219,7 @@ export function ModelPickerSheet({ open, onClose }: { open: boolean; onClose: ()
           {/* Search (provider + model steps) */}
           {step !== 'scope' && !keyFor ? (
             <View style={s.searchWrap}>
-              <Ionicons name="search" size={15} color={C.textFaint} />
+              <Icon name="search" size={15} color={C.textFaint} />
               <TextInput
                 style={s.search}
                 value={query}
@@ -234,7 +235,7 @@ export function ModelPickerSheet({ open, onClose }: { open: boolean; onClose: ()
                   onPress={() => setQuery('')}
                   accessibilityLabel="Clear filter"
                 >
-                  <Ionicons name="close-circle" size={15} color={C.textFaint} />
+                  <Icon name="close-circle" size={15} color={C.textFaint} />
                 </Pressable>
               ) : null}
             </View>
@@ -360,7 +361,7 @@ function ProviderRow({ p, onPress, currentModel }: { p: ProviderOption; onPress:
           {p.free_tier ? ' · free tier' : ''}
         </Text>
       </View>
-      <Ionicons name="chevron-forward" size={16} color={C.textFaint} />
+      <Icon name="chevron-forward" size={16} color={C.textFaint} />
     </Pressable>
   )
 }
@@ -397,7 +398,7 @@ function ModelRow({
           {[priceText, disabled ? 'currently unavailable' : ''].filter(Boolean).join(' · ')}
         </Text>
       </View>
-      {isCurrent ? <Ionicons name="checkmark" size={17} color={C.accent} /> : null}
+      {isCurrent ? <Icon name="checkmark" size={17} color={C.accent} /> : null}
     </Pressable>
   )
 }
@@ -413,12 +414,12 @@ function ScopeCard({
       disabled={disabled}
       accessibilityLabel={title}
     >
-      <Ionicons name={icon} size={18} color={C.accent} />
+      <Icon name={icon} size={18} color={C.accent} />
       <View style={{ flex: 1 }}>
         <Text style={s.scopeTitle}>{title}</Text>
         <Text style={s.scopeSub}>{sub}</Text>
       </View>
-      <Ionicons name="arrow-forward" size={15} color={C.textFaint} />
+      <Icon name="arrow-forward" size={15} color={C.textFaint} />
     </Pressable>
   )
 }

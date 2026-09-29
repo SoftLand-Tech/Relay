@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { Image } from 'expo-image'
 import { Ionicons } from '@expo/vector-icons'
+import { Icon } from '../Icon'
 import { C, useStyles } from '../../lib/theme'
 import type { ChatSegment } from '../../lib/chat'
 import { imageFallbackDataUrl, imageSource, isMediaRootPath, probeDownloadError } from '../../lib/mediaCache'
@@ -79,7 +80,7 @@ export function ImageBubble({ seg, maxWidth = 220 }: { seg: ChatSegment; maxWidt
   if (error) {
     return (
       <View style={s.errorTile}>
-        <Ionicons name="image-outline" size={20} color={C.textFaint} />
+        <Icon name="image-outline" size={20} color={C.textFaint} />
         <Text style={s.errorText}>{error}</Text>
       </View>
     )
@@ -92,7 +93,7 @@ export function ImageBubble({ seg, maxWidth = 220 }: { seg: ChatSegment; maxWidt
         style={({ pressed }) => [s.errorTile, pressed && s.pressed, { width: maxWidth }]}
         accessibilityLabel={`Load image${seg.name ? ` ${seg.name}` : ''}${seg.size ? ` (${formatBytes(seg.size)})` : ''}`}
       >
-        <Ionicons name="image-outline" size={20} color={C.textFaint} />
+        <Icon name="image-outline" size={20} color={C.textFaint} />
         <Text style={s.errorText}>{seg.size ? `${formatBytes(seg.size)} — tap to load` : 'Tap to load'}</Text>
       </Pressable>
     )

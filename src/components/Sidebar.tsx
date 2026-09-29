@@ -16,6 +16,7 @@ import {
 } from 'react-native'
 import type { GestureResponderEvent, PanResponderGestureState, ViewStyle } from 'react-native'
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons'
+import { Icon } from './Icon'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { usePathname } from 'expo-router'
 import { useStore } from '@nanostores/react'
@@ -513,7 +514,7 @@ export function Sidebar({
             accessibilityLabel={`${archOpen ? 'Collapse' : 'Expand'} archived chats`}
           >
             <Text style={s.sectionLabel}>{section.label} ({section.count ?? 0})</Text>
-            <Ionicons name={archOpen ? 'chevron-up' : 'chevron-down'} size={12} color={C.textFaint} />
+            <Icon name={archOpen ? 'chevron-up' : 'chevron-down'} size={12} color={C.textFaint} />
           </Pressable>
         )
       }
@@ -613,7 +614,7 @@ export function Sidebar({
             hitSlop={10}
             accessibilityLabel="Close menu"
           >
-            <Ionicons name="close" size={20} color={C.textDim} />
+            <Icon name="close" size={20} color={C.textDim} />
           </Pressable>
         </View>
 
@@ -632,7 +633,7 @@ export function Sidebar({
               }}
               accessibilityLabel={item.label}
             >
-              <Ionicons
+              <Icon
                 name={item.icon}
                 size={20}
                 color={item.key === activeKey && S.drawerRoundedCap ? C.accent : C.text}
@@ -650,7 +651,7 @@ export function Sidebar({
         {recent.length > 0 ? (
           <>
             <View style={s.searchWrap}>
-              <Ionicons name="search" size={14} color={C.textFaint} />
+              <Icon name="search" size={14} color={C.textFaint} />
               <TextInput
                 ref={searchInputRef}
                 style={s.searchInput}
@@ -676,7 +677,7 @@ export function Sidebar({
                   style={({ pressed }) => [s.clearBtn, pressed && s.iconBtnPressed]}
                   accessibilityLabel="Clear search"
                 >
-                  <Ionicons name="close" size={14} color={C.textFaint} />
+                  <Icon name="close" size={14} color={C.textFaint} />
                 </Pressable>
               ) : null}
             </View>
@@ -714,7 +715,7 @@ export function Sidebar({
           }}
           accessibilityLabel="New chat"
         >
-          <Ionicons name="add" size={20} color={C.onAccent} />
+          <Icon name="add" size={20} color={C.onAccent} />
           <Text style={s.newChatText}>New chat</Text>
         </Pressable>
       </Animated.View>
@@ -903,7 +904,7 @@ const RecentRow = React.memo(function RecentRow({
       <Text style={[s.recentTitle, c.active && s.recentTitleActive]} numberOfLines={1}>
         {c.title}
       </Text>
-      {isPinned ? <Ionicons name="pin" size={11} color={C.textFaint} /> : null}
+      {isPinned ? <Icon name="pin" size={11} color={C.textFaint} /> : null}
       <StatusDot status={c.status} />
       <Pressable
         style={s.rowMenu}
@@ -911,7 +912,7 @@ const RecentRow = React.memo(function RecentRow({
         onPress={(e) => onMenu(c, e)}
         accessibilityLabel={`Options for ${c.title}`}
       >
-        <Ionicons name="ellipsis-horizontal" size={15} color={C.textFaint} />
+        <Icon name="ellipsis-horizontal" size={15} color={C.textFaint} />
       </Pressable>
     </Pressable>
   )

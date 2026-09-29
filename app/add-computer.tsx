@@ -3,6 +3,7 @@ import { View, Text, ScrollView, Pressable, StyleSheet } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { router } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
+import { Icon } from '../src/components/Icon'
 import { PairForm } from '../src/components/PairForm'
 import { C, useStyles } from '../src/lib/theme'
 
@@ -21,7 +22,7 @@ export default function AddComputer() {
           accessibilityRole="button"
           accessibilityLabel="Back to settings"
         >
-          <Ionicons name="chevron-back" size={22} color={C.text} />
+          <Icon name="chevron-back" size={22} color={C.text} />
           <Text style={s.backText}>Settings</Text>
         </Pressable>
         <Text style={s.title}>Add a computer</Text>

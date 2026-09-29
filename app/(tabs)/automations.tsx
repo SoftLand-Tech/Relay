@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react'
 import { View, Text, ScrollView, StyleSheet, Pressable, RefreshControl, ActivityIndicator, Modal, TextInput, Alert, KeyboardAvoidingView, Platform } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
+import { Icon } from '../../src/components/Icon'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useStore } from '@nanostores/react'
 import * as Clipboard from 'expo-clipboard'
@@ -199,7 +200,7 @@ export default function Automations() {
             hitSlop={8}
             accessibilityLabel="New automation"
           >
-            <Ionicons name="add" size={20} color={C.onAccent} />
+            <Icon name="add" size={20} color={C.onAccent} />
           </Pressable>
         }
       >
@@ -212,7 +213,7 @@ export default function Automations() {
 
           {status ? (
             <View style={s.statusRow}>
-              <Ionicons name="checkmark-circle" size={13} color={C.greenSoft} />
+              <Icon name="checkmark-circle" size={13} color={C.greenSoft} />
               <Text style={s.statusText}>{status}</Text>
             </View>
           ) : null}
@@ -227,11 +228,11 @@ export default function Automations() {
 
           {!loading && jobs.length === 0 && !error ? (
             <View style={s.empty}>
-              <Ionicons name="timer-outline" size={28} color={C.textFaint} />
+              <Icon name="timer-outline" size={28} color={C.textFaint} />
               <Text style={s.emptyTitle}>No automations yet</Text>
               <Text style={s.emptyBody}>Tap + to schedule your first job,{'\n'}or create one from chat with /cron add</Text>
               <Pressable style={({ pressed }) => [s.emptyBtn, pressed && s.btnPressed]} onPress={openAdd} accessibilityLabel="New automation">
-                <Ionicons name="add" size={16} color={C.onAccent} />
+                <Icon name="add" size={16} color={C.onAccent} />
                 <Text style={s.emptyBtnText}>New automation</Text>
               </Pressable>
             </View>
@@ -249,7 +250,7 @@ export default function Automations() {
                   onPress={() => setExpanded(open ? null : j.job_id)}
                   accessibilityLabel={open ? `Collapse ${j.name ?? j.job_id}` : `Expand ${j.name ?? j.job_id}`}
                 >
-                  <Ionicons name={paused ? 'pause-circle-outline' : 'timer-outline'} size={17} color={paused ? C.textFaint : C.accent} />
+                  <Icon name={paused ? 'pause-circle-outline' : 'timer-outline'} size={17} color={paused ? C.textFaint : C.accent} />
                   <Text style={[s.name, paused && { color: C.textDim }]} numberOfLines={1}>
                     {j.name ?? j.job_id}
                   </Text>
@@ -258,7 +259,7 @@ export default function Automations() {
                   ) : paused ? (
                     <Text style={s.pausedChip}>paused</Text>
                   ) : null}
-                  <Ionicons name={open ? 'chevron-up' : 'chevron-down'} size={14} color={C.textFaint} />
+                  <Icon name={open ? 'chevron-up' : 'chevron-down'} size={14} color={C.textFaint} />
                 </Pressable>
 
                 {j.prompt_preview ? (
@@ -413,7 +414,7 @@ function Action({ icon, label, onPress, danger }: { icon: keyof typeof Ionicons.
       hitSlop={4}
       accessibilityLabel={label}
     >
-      <Ionicons name={icon} size={14} color={danger ? C.red : C.textDim} />
+      <Icon name={icon} size={14} color={danger ? C.red : C.textDim} />
       <Text style={[s.actionLabel, danger && { color: C.red }]}>{label}</Text>
     </Pressable>
   )

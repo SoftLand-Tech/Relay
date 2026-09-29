@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { useAudioPlayer, useAudioPlayerStatus } from 'expo-audio'
 import { Ionicons } from '@expo/vector-icons'
+import { Icon } from '../Icon'
 import { useStore } from '@nanostores/react'
 import { C, useStyles } from '../../lib/theme'
 import type { ChatSegment } from '../../lib/chat'
@@ -88,7 +89,7 @@ export function AudioBubble({ seg }: { seg: ChatSegment }) {
           onPress={() => void toggle()}
           accessibilityLabel={busyDownloading ? 'Cancel download' : status.playing ? 'Pause audio' : 'Play audio'}
         >
-          <Ionicons
+          <Icon
             name={busyDownloading ? 'close' : status.playing ? 'pause' : 'play'}
             size={16}
             color={C.onAccent}
@@ -110,9 +111,9 @@ export function AudioBubble({ seg }: { seg: ChatSegment }) {
       </View>
       {errorMsg && !busyDownloading ? (
         <Pressable style={({ pressed }) => [s.errorRow, pressed && s.pressed]} onPress={() => void toggle()} accessibilityLabel="Retry download">
-          <Ionicons name="alert-circle" size={13} color={C.red} />
+          <Icon name="alert-circle" size={13} color={C.red} />
           <Text style={s.errorText} numberOfLines={1}>{errorMsg}</Text>
-          <Ionicons name="refresh" size={13} color={C.accent} />
+          <Icon name="refresh" size={13} color={C.accent} />
         </Pressable>
       ) : null}
     </View>

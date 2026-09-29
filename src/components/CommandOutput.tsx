@@ -18,6 +18,7 @@ import React, { useState } from 'react'
 import { View, Text, StyleSheet, Pressable } from 'react-native'
 import { useStore } from '@nanostores/react'
 import { Ionicons } from '@expo/vector-icons'
+import { Icon } from './Icon'
 import * as Clipboard from 'expo-clipboard'
 import * as Haptics from 'expo-haptics'
 import Markdown from '@ronradtke/react-native-markdown-display'
@@ -127,7 +128,7 @@ export const CommandCard = React.memo(function CommandCard({
   if (variant === 'notice') {
     return (
       <View style={s.bareRow} accessibilityLabel={`${chipLabel} output, ${state}`}>
-        <Ionicons name="information-circle-outline" size={13} color={C.textFaint} />
+        <Icon name="information-circle-outline" size={13} color={C.textFaint} />
         <Text style={s.noticeText} selectable>{m.text}</Text>
       </View>
     )
@@ -135,7 +136,7 @@ export const CommandCard = React.memo(function CommandCard({
   if (variant === 'success') {
     return (
       <View style={s.successRow} accessibilityLabel={`${chipLabel} output, ${state}`}>
-        <Ionicons name="checkmark-circle" size={14} color={C.greenSoft} />
+        <Icon name="checkmark-circle" size={14} color={C.greenSoft} />
         <Text style={s.successText} selectable>{m.text}</Text>
         <Text style={s.successTime}>{fmtTime(m.ts)}</Text>
       </View>
@@ -182,7 +183,7 @@ export const CommandCard = React.memo(function CommandCard({
     >
       {/* Header: status icon + /command chip + time */}
       <View style={s.head}>
-        <Ionicons name={tone.icon} size={14} color={tone.color} />
+        <Icon name={tone.icon} size={14} color={tone.color} />
         <View style={[s.chip, { backgroundColor: chipTone.bg }]}>
           <Text style={[s.chipText, { color: chipTone.fg }]}>{chipLabel}</Text>
         </View>
@@ -204,11 +205,11 @@ export const CommandCard = React.memo(function CommandCard({
                 hitSlop={6}
                 accessibilityLabel={`Use suggested command ${slashLabel(cmd.suggestion)}`}
               >
-                <Ionicons name="return-down-back" size={14} color={C.textFaint} />
+                <Icon name="return-down-back" size={14} color={C.textFaint} />
                 <Text style={s.suggestLead}>
                   Did you mean <Text style={s.suggestCmd}>{slashLabel(cmd.suggestion)}</Text>
                 </Text>
-                <Ionicons name="chevron-forward" size={13} color={C.textFaint} />
+                <Icon name="chevron-forward" size={13} color={C.textFaint} />
               </Pressable>
             ) : cmd.suggestion ? (
               <Text style={s.leftoverText}>Did you mean {slashLabel(cmd.suggestion)}?</Text>
@@ -226,7 +227,7 @@ export const CommandCard = React.memo(function CommandCard({
                     hitSlop={6}
                     accessibilityLabel="Browse all commands"
                   >
-                    <Ionicons name="terminal-outline" size={12} color={C.textDim} />
+                    <Icon name="terminal-outline" size={12} color={C.textDim} />
                     <Text style={s.hintChipText}>Browse all commands</Text>
                   </Pressable>
                 ) : null}
@@ -267,7 +268,7 @@ export const CommandCard = React.memo(function CommandCard({
                     <Text style={s.listTitle} numberOfLines={1}>{row.title}</Text>
                     {row.sub ? <Text style={s.listSub} numberOfLines={1}>{row.sub}</Text> : null}
                   </View>
-                  {tappable ? <Ionicons name="chevron-forward" size={13} color={C.textFaint} /> : null}
+                  {tappable ? <Icon name="chevron-forward" size={13} color={C.textFaint} /> : null}
                 </>
               )
               return tappable ? (
@@ -308,9 +309,9 @@ export const CommandCard = React.memo(function CommandCard({
           style={({ pressed }) => [s.footer, pressed && s.footerPressed]}
           accessibilityLabel="Open command browser"
         >
-          <Ionicons name="grid-outline" size={14} color={C.accent} />
+          <Icon name="grid-outline" size={14} color={C.accent} />
           <Text style={s.footerText}>Open command browser</Text>
-          <Ionicons name="chevron-forward" size={14} color={C.textFaint} style={s.footerChevron} />
+          <Icon name="chevron-forward" size={14} color={C.textFaint} style={s.footerChevron} />
         </Pressable>
       ) : null}
 
@@ -322,7 +323,7 @@ export const CommandCard = React.memo(function CommandCard({
             style={({ pressed }) => [s.iconBtn, pressed && s.iconPressed]}
             accessibilityLabel={`Copy ${chipLabel} output`}
           >
-            <Ionicons name={copied ? 'checkmark' : 'copy-outline'} size={14} color={copied ? C.greenSoft : C.textFaint} />
+            <Icon name={copied ? 'checkmark' : 'copy-outline'} size={14} color={copied ? C.greenSoft : C.textFaint} />
           </Pressable>
           {copied ? <Text style={s.copiedText}>Copied</Text> : null}
         </View>

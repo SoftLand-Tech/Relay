@@ -1,6 +1,7 @@
 import React from 'react'
 import { StyleSheet, Text, View } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
+import { Icon } from '../Icon'
 import { C, useStyles } from '../../lib/theme'
 import type { ChatSegment } from '../../lib/chat'
 import { ImageBubble } from './ImageBubble'
@@ -18,7 +19,7 @@ export function MediaSegmentView({ seg }: { seg: ChatSegment }) {
   if (seg.state === 'missing' && !seg.localUri) {
     return (
       <View style={s.errorTile}>
-        <Ionicons name="cloud-offline-outline" size={18} color={C.textFaint} />
+        <Icon name="cloud-offline-outline" size={18} color={C.textFaint} />
         <Text style={s.errorText}>{seg.name ? `${seg.name} is no longer on the gateway` : 'No longer on gateway'}</Text>
       </View>
     )

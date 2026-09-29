@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from 'react'
 import { Animated, Modal, Pressable, StyleSheet, Text, View } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
+import { Icon } from '../Icon'
 import { C, useStyles } from '../../lib/theme'
 
 /**
@@ -60,7 +61,7 @@ export function AttachSheet({ visible, onClose, onLibrary, onCamera, onFile }: A
               accessibilityLabel={row.label}
             >
               <View style={s.rowIcon}>
-                <Ionicons name={row.icon} size={19} color={C.text} />
+                <Icon name={row.icon} size={19} color={C.text} />
               </View>
               <Text style={s.rowText}>{row.label}</Text>
             </Pressable>

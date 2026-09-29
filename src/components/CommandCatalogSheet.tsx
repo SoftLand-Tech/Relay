@@ -21,6 +21,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { Modal, View, Text, Pressable, TextInput, SectionList, StyleSheet, KeyboardAvoidingView, Platform, ActivityIndicator } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
+import { Icon } from './Icon'
 import * as Haptics from 'expo-haptics'
 import { useStore } from '@nanostores/react'
 import { loadCatalog, loadSkillDescriptions, commandCategories, commandCatalog, skillCommands, skillDescriptions, catalogWarning, slashLabel } from '../lib/slash'
@@ -129,7 +130,7 @@ export function CommandCatalogSheet({
         <View style={s.sheet}>
           {/* Header */}
           <View style={s.head}>
-            <Ionicons name="terminal-outline" size={15} color={C.accent} />
+            <Icon name="terminal-outline" size={15} color={C.accent} />
             <View style={{ flex: 1 }}>
               <Text style={s.headTitle}>Commands</Text>
               <Text style={s.headSub} numberOfLines={1}>
@@ -146,13 +147,13 @@ export function CommandCatalogSheet({
               onPress={onClose}
               accessibilityLabel="Close"
             >
-              <Ionicons name="close" size={20} color={C.textDim} />
+              <Icon name="close" size={20} color={C.textDim} />
             </Pressable>
           </View>
 
           {/* Search */}
           <View style={s.searchWrap}>
-            <Ionicons name="search" size={15} color={C.textFaint} />
+            <Icon name="search" size={15} color={C.textFaint} />
             <TextInput
               style={s.search}
               value={query}
@@ -170,7 +171,7 @@ export function CommandCatalogSheet({
                 onPress={() => setQuery('')}
                 accessibilityLabel="Clear filter"
               >
-                <Ionicons name="close-circle" size={15} color={C.textFaint} />
+                <Icon name="close-circle" size={15} color={C.textFaint} />
               </Pressable>
             ) : null}
           </View>
@@ -190,9 +191,9 @@ export function CommandCatalogSheet({
                 style={({ pressed }) => [s.fallbackRow, pressed && s.rowPressed]}
                 accessibilityLabel="Run /help without the native browser"
               >
-                <Ionicons name="terminal-outline" size={15} color={C.accent} />
+                <Icon name="terminal-outline" size={15} color={C.accent} />
                 <Text style={s.fallbackText}>Run /help anyway</Text>
-                <Ionicons name="chevron-forward" size={15} color={C.textFaint} />
+                <Icon name="chevron-forward" size={15} color={C.textFaint} />
               </Pressable>
             </View>
           ) : (
@@ -210,7 +211,7 @@ export function CommandCatalogSheet({
                   onPress={() => pick(row)}
                   accessibilityLabel={`${row.label}${row.desc ? `, ${row.desc.slice(0, 80)}` : ''}`}
                 >
-                  <Ionicons
+                  <Icon
                     name={row.kind === 'skill' ? 'sparkles-outline' : 'terminal-outline'}
                     size={14}
                     color={row.kind === 'skill' ? C.accent : C.textFaint}

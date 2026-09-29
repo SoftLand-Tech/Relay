@@ -8,6 +8,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { Modal, View, Text, Pressable, TextInput, ScrollView, StyleSheet, KeyboardAvoidingView, Platform, ActivityIndicator } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
+import { Icon } from './Icon'
 import * as Haptics from 'expo-haptics'
 import { cachedCommandChoices, rememberCommandChoices } from '../lib/slash'
 import { C, useStyles } from '../lib/theme'
@@ -88,7 +89,7 @@ export function CommandOptionsSheet({
         <Pressable style={[StyleSheet.absoluteFill, { backgroundColor: C.scrim }]} onPress={onClose} accessibilityLabel="Close" />
         <View style={s.sheet}>
           <View style={s.head}>
-            <Ionicons name="terminal-outline" size={15} color={C.accent} />
+            <Icon name="terminal-outline" size={15} color={C.accent} />
             <View style={{ flex: 1 }}>
               <Text style={s.title}>/{command}</Text>
               {description ? <Text style={s.sub} numberOfLines={2}>{description}</Text> : null}
@@ -99,12 +100,12 @@ export function CommandOptionsSheet({
               onPress={onClose}
               accessibilityLabel="Close"
             >
-              <Ionicons name="close" size={18} color={C.textDim} />
+              <Icon name="close" size={18} color={C.textDim} />
             </Pressable>
           </View>
 
           <View style={s.searchWrap}>
-            <Ionicons name="search" size={14} color={C.textFaint} />
+            <Icon name="search" size={14} color={C.textFaint} />
             <TextInput
               style={s.search}
               value={query}
@@ -127,7 +128,7 @@ export function CommandOptionsSheet({
                   <Text style={s.rowText} numberOfLines={1}>{c.value}</Text>
                   {c.meta ? <Text style={s.rowMeta} numberOfLines={1}>{c.meta}</Text> : null}
                 </View>
-                <Ionicons name="arrow-forward" size={13} color={C.textFaint} />
+                <Icon name="arrow-forward" size={13} color={C.textFaint} />
               </Pressable>
             ))}
             {loadingDyn ? (
@@ -139,7 +140,7 @@ export function CommandOptionsSheet({
             {!shown.length && !loadingDyn ? (
               <Pressable style={({ pressed }) => [s.row, pressed && s.rowPressed]} onPress={() => run('')}>
                 <Text style={s.rowText}>Run /{command} anyway</Text>
-                <Ionicons name="arrow-forward" size={13} color={C.textFaint} />
+                <Icon name="arrow-forward" size={13} color={C.textFaint} />
               </Pressable>
             ) : null}
 
@@ -160,7 +161,7 @@ export function CommandOptionsSheet({
                   disabled={!custom.trim()}
                   accessibilityLabel={`Run ${command}`}
                 >
-                  <Ionicons name="arrow-up" size={16} color={C.onAccent} />
+                  <Icon name="arrow-up" size={16} color={C.onAccent} />
                 </Pressable>
               </View>
             ) : null}

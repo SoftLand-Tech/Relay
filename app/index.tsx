@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { router } from 'expo-router'
 import { useStore } from '@nanostores/react'
 import { Ionicons } from '@expo/vector-icons'
+import { Icon } from '../src/components/Icon'
 import { PairForm } from '../src/components/PairForm'
 import { MochiStage } from '../src/components/Mascot'
 import { servers as serversStore, switchToServer } from '../src/lib/gateway'
@@ -54,13 +55,13 @@ export default function Onboarding() {
                 {switchingId === sv.id ? (
                   <ActivityIndicator size="small" color={C.accent} />
                 ) : (
-                  <Ionicons name="desktop-outline" size={20} color={C.textDim} />
+                  <Icon name="desktop-outline" size={20} color={C.textDim} />
                 )}
                 <View style={{ flex: 1 }}>
                   <Text style={s.savedName} numberOfLines={1}>{sv.name}</Text>
                   <Text style={s.savedHost} numberOfLines={1}>{sv.tls ? 'WSS' : 'WS'} · paired {new Date(sv.addedAt).toLocaleDateString()}</Text>
                 </View>
-                <Ionicons name="chevron-forward" size={16} color={C.textFaint} />
+                <Icon name="chevron-forward" size={16} color={C.textFaint} />
               </Pressable>
             ))}
             {switchErr ? <Text style={s.error}>{switchErr}</Text> : null}

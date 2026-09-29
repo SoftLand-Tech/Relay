@@ -1,6 +1,7 @@
 import React, { useCallback, useMemo, useState } from 'react'
 import { View, Text, Pressable, StyleSheet } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
+import { Icon } from './Icon'
 import { useRouter } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useStore } from '@nanostores/react'
@@ -223,7 +224,7 @@ export function ScreenShell({
           hitSlop={8}
           accessibilityLabel="Open menu"
         >
-          <Ionicons name="menu" size={20} color={C.text} />
+          <Icon name="menu" size={20} color={C.text} />
         </Pressable>
 
         <View style={s.titleWrap}>
@@ -240,7 +241,7 @@ export function ScreenShell({
             hitSlop={8}
             accessibilityLabel="Search chats"
           >
-            <Ionicons name="search" size={18} color={C.text} />
+            <Icon name="search" size={18} color={C.text} />
           </Pressable>
         ) : null}
         {right}
@@ -249,7 +250,7 @@ export function ScreenShell({
           hitSlop={8}
           accessibilityLabel={online ? 'Connected' : 'Not connected'}
         >
-          <Ionicons
+          <Icon
             name={online ? 'radio-button-on' : 'cloud-offline-outline'}
             size={18}
             color={online ? C.greenSoft : C.textFaint}
@@ -281,7 +282,7 @@ export function ScreenShell({
         footer={
           pending.length > 0 ? (
             <View style={s.footerNote}>
-              <Ionicons name="alert-circle" size={14} color={C.amber} />
+              <Icon name="alert-circle" size={14} color={C.amber} />
               <Text style={s.footerText}>
                 {pending.length} conversation{pending.length > 1 ? 's' : ''} waiting on you
               </Text>

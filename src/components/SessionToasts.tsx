@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from 'react'
 import { Animated, Easing, Pressable, StyleSheet, Text, View } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
+import { Icon } from './Icon'
 import { useRouter } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useStore } from '@nanostores/react'
@@ -58,14 +59,14 @@ function ToastCard({ t }: { t: SessionToast }) {
         accessibilityLabel={`${t.title}. ${t.body}. Open conversation${t.chatTitle ? ` ${t.chatTitle}` : ''}`}
       >
         <View style={[s.iconWrap, { backgroundColor: meta.color }]}>
-          <Ionicons name={meta.icon} size={17} color="#081114" />
+          <Icon name={meta.icon} size={17} color="#081114" />
         </View>
         <View style={s.textWrap}>
           {t.chatTitle ? <Text style={s.kicker} numberOfLines={1}>{t.chatTitle}</Text> : null}
           <Text style={s.title} numberOfLines={1}>{t.title}</Text>
           {t.body ? <Text style={s.body} numberOfLines={2}>{t.body}</Text> : null}
         </View>
-        <Ionicons name="chevron-forward" size={16} color={C.textFaint} />
+        <Icon name="chevron-forward" size={16} color={C.textFaint} />
       </Pressable>
     </Animated.View>
   )

@@ -17,6 +17,7 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useStore } from '@nanostores/react'
 import { Ionicons } from '@expo/vector-icons'
+import { Icon } from '../../src/components/Icon'
 import * as Haptics from 'expo-haptics'
 import * as ImagePicker from 'expo-image-picker'
 import * as DocumentPicker from 'expo-document-picker'
@@ -733,7 +734,7 @@ export default function Chat() {
               hitSlop={6}
               accessibilityLabel={`Current model ${curModel}. Tap to change`}
             >
-              <Ionicons name="cube-outline" size={12} color={C.accent} />
+              <Icon name="cube-outline" size={12} color={C.accent} />
               <Text style={s.modelChipText} numberOfLines={1}>{curModel}</Text>
             </Pressable>
           ) : null
@@ -845,7 +846,7 @@ export default function Chat() {
                       }}
                       accessibilityLabel={st.label}
                     >
-                      <Ionicons name={st.icon} size={19} color={C.textDim} />
+                      <Icon name={st.icon} size={19} color={C.textDim} />
                       <Text style={s.starterText}>{st.label}</Text>
                     </Pressable>
                   ))}
@@ -873,11 +874,11 @@ export default function Chat() {
                   accessibilityRole="button"
                   accessibilityLabel={`Show ${tls.length} tool calls: ${toolSummary}`}
                 >
-                  <Ionicons name="terminal-outline" size={11} color={C.accent} />
+                  <Icon name="terminal-outline" size={11} color={C.accent} />
                   <Text style={s.toolsToggleText} numberOfLines={1}>
                     {toolSummary}
                   </Text>
-                  <Ionicons name="chevron-up" size={12} color={C.textFaint} />
+                  <Icon name="chevron-up" size={12} color={C.textFaint} />
                 </Pressable>
               ) : tls.length > 0 ? (
                 <>
@@ -887,11 +888,11 @@ export default function Chat() {
                     accessibilityRole="button"
                     accessibilityLabel="Hide tool calls"
                   >
-                    <Ionicons name="terminal-outline" size={11} color={C.accent} />
+                    <Icon name="terminal-outline" size={11} color={C.accent} />
                     <Text style={s.toolsToggleText} numberOfLines={1}>
                       {toolSummary}
                     </Text>
-                    <Ionicons name="chevron-down" size={12} color={C.textFaint} />
+                    <Icon name="chevron-down" size={12} color={C.textFaint} />
                   </Pressable>
                   <ScrollView style={s.toolsOpenList} keyboardShouldPersistTaps="handled">
                     {tls.map((t: ToolItem) => <ToolRow key={t.id} t={t} />)}
@@ -917,7 +918,7 @@ export default function Chat() {
                 onPress={jumpToLatest}
                 accessibilityLabel="Jump to latest"
               >
-              <Ionicons name="arrow-down" size={19} color={C.text} />
+              <Icon name="arrow-down" size={19} color={C.text} />
             </Pressable>
           ) : null}
 
@@ -925,7 +926,7 @@ export default function Chat() {
           {slashItems && slashItems.length > 0 ? (
             <View style={s.slashPanel}>
               <View style={s.slashHead}>
-                <Ionicons name="terminal-outline" size={13} color={C.accent} />
+                <Icon name="terminal-outline" size={13} color={C.accent} />
                 <Text style={s.slashHeadText}>
                   {cmdCount} command{cmdCount === 1 ? '' : 's'} · {skillCount} skill{skillCount === 1 ? '' : 's'}
                 </Text>
@@ -948,7 +949,7 @@ export default function Chat() {
                       }}
                       accessibilityLabel={`${label}, ${isSkill ? 'skill' : 'command'}`}
                     >
-                      <Ionicons
+                      <Icon
                         name={isSkill ? 'sparkles-outline' : 'terminal-outline'}
                         size={14}
                         color={isSkill ? C.accent : C.textFaint}
@@ -973,7 +974,7 @@ export default function Chat() {
           {req?.method === 'approval' ? (
             <View style={s.sheet}>
               <View style={s.sheetHead}>
-                <Ionicons name="shield-checkmark-outline" size={15} color={C.amber} />
+                <Icon name="shield-checkmark-outline" size={15} color={C.amber} />
                 <Text style={s.sheetTitle}>
                   Approval needed{req.replayed ? ' (restored)' : ''}
                 </Text>
@@ -1015,7 +1016,7 @@ export default function Chat() {
           {req?.method === 'clarify' ? (
             <View style={s.sheet}>
               <View style={s.sheetHead}>
-                <Ionicons name="help-circle-outline" size={15} color={C.accent} />
+                <Icon name="help-circle-outline" size={15} color={C.accent} />
                 <Text style={s.sheetTitle}>Hermes needs you</Text>
               </View>
               {isBatchClarify ? (
@@ -1077,7 +1078,7 @@ export default function Chat() {
                       onPress={() => { const t = answerText; setAnswerText(''); void respondClarify(t) }}
                       accessibilityLabel="Send clarification"
                     >
-                      <Ionicons name="arrow-up" size={17} color={C.onAccent} />
+                      <Icon name="arrow-up" size={17} color={C.onAccent} />
                     </Pressable>
                   </View>
                 </>
@@ -1088,7 +1089,7 @@ export default function Chat() {
           {(req?.method === 'sudo' || req?.method === 'secret') ? (
             <View style={s.sheet}>
               <View style={s.sheetHead}>
-                <Ionicons name="lock-closed-outline" size={15} color={C.red} />
+                <Icon name="lock-closed-outline" size={15} color={C.red} />
                 <Text style={[s.sheetTitle, { color: C.red }]}>
                   {req.method === 'sudo' ? 'Sudo requested' : 'Secret requested'}
                 </Text>
@@ -1127,7 +1128,7 @@ export default function Chat() {
             {queued.length > 0 ? (
               <View style={s.queueStrip}>
                 <View style={s.queueHead}>
-                  <Ionicons name="time-outline" size={12} color={C.accent} />
+                  <Icon name="time-outline" size={12} color={C.accent} />
                   <Text style={s.queueHeadText}>
                     {queued.length === 1 ? '1 message' : `${queued.length} messages`} queued ·{' '}
                     {busy ? 'sends when this reply finishes' : online ? 'sending…' : 'waiting for connection'}
@@ -1192,7 +1193,7 @@ export default function Chat() {
                         hitSlop={6}
                         accessibilityLabel="Send this now as a steer"
                       >
-                        <Ionicons name="flash-outline" size={14} color={C.accent} />
+                        <Icon name="flash-outline" size={14} color={C.accent} />
                       </Pressable>
                     ) : null}
                     <Pressable
@@ -1201,7 +1202,7 @@ export default function Chat() {
                       hitSlop={6}
                       accessibilityLabel="Remove queued message"
                     >
-                      <Ionicons name="close" size={14} color={C.textDim} />
+                      <Icon name="close" size={14} color={C.textDim} />
                     </Pressable>
                   </View>
                   )
@@ -1239,7 +1240,7 @@ export default function Chat() {
                 hitSlop={8}
                 accessibilityLabel={canAttach ? 'Add attachment' : steerMode && busy ? 'Attachments unavailable in steer mode' : 'Attachments unavailable offline'}
               >
-                <Ionicons name={canAttach ? 'add' : 'add-circle-outline'} size={22} color={canAttach ? C.textDim : C.border} />
+                <Icon name={canAttach ? 'add' : 'add-circle-outline'} size={22} color={canAttach ? C.textDim : C.border} />
               </Pressable>
 
               {recording ? (
@@ -1275,7 +1276,7 @@ export default function Chat() {
                   hitSlop={8}
                   accessibilityLabel="Stop"
                 >
-                  <Ionicons name="stop" size={17} color={C.onAccent} />
+                  <Icon name="stop" size={17} color={C.onAccent} />
                 </Pressable>
               ) : (
                 <Pressable
@@ -1288,7 +1289,7 @@ export default function Chat() {
                   {voiceState === 'transcribing' ? (
                     <ActivityIndicator color={C.textDim} size="small" />
                   ) : (
-                    <Ionicons name={recording ? 'square' : 'mic-outline'} size={19} color={recording ? '#fff' : C.textDim} />
+                    <Icon name={recording ? 'square' : 'mic-outline'} size={19} color={recording ? '#fff' : C.textDim} />
                   )}
                 </Pressable>
               )}
@@ -1300,7 +1301,7 @@ export default function Chat() {
                 hitSlop={8}
                 accessibilityLabel={steerMode && busy ? 'Send steer' : 'Send message'}
               >
-                <Ionicons
+                <Icon
                   name={isSlashMode ? 'return-down-back' : steerMode && busy ? 'bulb' : 'arrow-up'}
                   size={18}
                   color={canSend ? C.onAccent : C.textFaint}
@@ -1315,7 +1316,7 @@ export default function Chat() {
                 accessibilityRole="button"
                 accessibilityLabel={steerMode ? 'Steer mode on' : 'Steer mode'}
               >
-                <Ionicons name="git-branch-outline" size={12} color={steerMode ? C.onAccent : C.textDim} />
+                <Icon name="git-branch-outline" size={12} color={steerMode ? C.onAccent : C.textDim} />
                 <Text style={[s.steerText, steerMode && { color: C.onAccent }]}>Steer</Text>
               </Pressable>
             ) : null}
