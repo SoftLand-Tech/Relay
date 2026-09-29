@@ -369,7 +369,9 @@ const makeS = () => StyleSheet.create({
     elevation: 8,
   },
   trayTitleAbs: { position: 'absolute', left: 0, right: 0, alignItems: 'center', justifyContent: 'center' },
-  trayTitleWrap: { alignItems: 'center' },
+  // stretch to the inset width so a long title ellipsizes its tail (start
+  // visible + '…') instead of overflowing both ends and getting mid-clipped.
+  trayTitleWrap: { alignSelf: 'stretch', alignItems: 'center' },
   trayBrand: { color: C.textFaint, fontSize: 11.5, fontWeight: '700', letterSpacing: 0.5, marginBottom: 1 },
   trayTitle: { color: C.text, fontSize: 16.5, fontWeight: '700' },
   trayControls: { flexDirection: 'row', alignItems: 'center' },
