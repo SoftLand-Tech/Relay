@@ -320,6 +320,7 @@ export const ThinkingBlock = React.memo(function ThinkingBlock({
   onEffortPress?: () => void
 }) {
   const s = useStyles(makeS)
+  const S = useShape()
   const [open, setOpen] = useState(false)
   const [now, setNow] = useState(() => Date.now())
   const hasText = !!seg.text.trim()
@@ -330,30 +331,52 @@ export const ThinkingBlock = React.memo(function ThinkingBlock({
   }, [live, hasText])
   if (!hasText) return null
   const meta = live ? formatThinkMeta(seg.startedAt ?? 0, seg.chars ?? seg.text.length, now) : seg.meta
+  const header = (
+    <View style={s.thinkHead}>
+      <Icon name={open ? 'chevron-down' : 'chevron-forward'} size={12} color={C.textFaint} />
+      {live ? <ThinkingDots /> : null}
+      <Text style={s.thinkLabel}>
+        {live ? 'Thinking' : 'Thought'}
+        {meta ? ` · ${meta}` : ''}
+      </Text>
+      {live && effort && onEffortPress ? (
+        <Pressable
+          hitSlop={6}
+          style={({ pressed }) => [s.effortChip, pressed && s.iconPressed]}
+          onPress={onEffortPress}
+          accessibilityLabel={`Reasoning effort ${effort}. Tap to change`}
+        >
+          <Text style={s.effortChipText}>effort: {effort}</Text>
+        </Pressable>
+      ) : null}
+    </View>
+  )
+  if (S.dashedThinking) {
+    // Mocheme: the dashed pill wraps ONLY the header — a multi-line paragraph
+    // inside a stadium-shaped capsule read as one giant dashed blob. The
+    // expanded reasoning sits below it, outside the shape.
+    return (
+      <View style={s.thinkMochi}>
+        <Pressable
+          onPress={() => setOpen(!open)}
+          accessibilityLabel={open ? 'Collapse thinking' : 'Expand thinking'}
+          style={({ pressed }) => [s.think, s.thinkPill, pressed && s.iconPressed]}
+        >
+          {header}
+        </Pressable>
+        {open ? (
+          <Text style={s.thinkText}>{seg.text.length > 4000 ? seg.text.slice(-4000) : seg.text}</Text>
+        ) : null}
+      </View>
+    )
+  }
   return (
     <Pressable
       onPress={() => setOpen(!open)}
       accessibilityLabel={open ? 'Collapse thinking' : 'Expand thinking'}
       style={({ pressed }) => [s.think, pressed && s.iconPressed]}
     >
-      <View style={s.thinkHead}>
-        <Icon name={open ? 'chevron-down' : 'chevron-forward'} size={12} color={C.textFaint} />
-        {live ? <ThinkingDots /> : null}
-        <Text style={s.thinkLabel}>
-          {live ? 'Thinking' : 'Thought'}
-          {meta ? ` · ${meta}` : ''}
-        </Text>
-        {live && effort && onEffortPress ? (
-          <Pressable
-            hitSlop={6}
-            style={({ pressed }) => [s.effortChip, pressed && s.iconPressed]}
-            onPress={onEffortPress}
-            accessibilityLabel={`Reasoning effort ${effort}. Tap to change`}
-          >
-            <Text style={s.effortChipText}>effort: {effort}</Text>
-          </Pressable>
-        ) : null}
-      </View>
+      {header}
       {open ? (
         <Text style={s.thinkText}>{seg.text.length > 4000 ? seg.text.slice(-4000) : seg.text}</Text>
       ) : null}
@@ -447,9 +470,11 @@ const makeS = () => StyleSheet.create({
     borderColor: C.thinkBorder,
     paddingHorizontal: S.dashedThinking ? 14 : 10,
     paddingVertical: S.dashedThinking ? 8 : 10,
-    marginBottom: 8,
     alignSelf: S.dashedThinking ? 'flex-start' : 'stretch',
   },
+  // Mocheme wrapper: pill + (when expanded) the reasoning text below it.
+  thinkMochi: { marginBottom: 8 },
+  thinkPill: { marginBottom: 0 },
   thinkHead: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   thinkLabel: { color: C.textFaint, fontSize: 11.5, fontWeight: '600' },
   thinkText: { color: C.textDim, fontSize: 12.5, lineHeight: 18, marginTop: 6 },
