@@ -70,6 +70,8 @@ import { ModelPickerSheet } from '../../src/components/ModelPickerSheet'
 import { CommandOptionsSheet } from '../../src/components/CommandOptionsSheet'
 import { CommandCatalogSheet } from '../../src/components/CommandCatalogSheet'
 import { MessageBubble, ToolRow } from '../../src/components/Chat'
+import { Mascot } from '../../src/components/Mascot'
+import { useMochiState } from '../../src/components/mochi/useMochiState'
 import { ScreenShell } from '../../src/components/ScreenShell'
 import { C } from '../../src/lib/theme'
 
@@ -132,6 +134,10 @@ export default function Chat() {
   const voiceState = useStore(voiceBusy)
   const recTimer = useRef<ReturnType<typeof setInterval> | null>(null)
   const slashSeq = useRef(0)
+  // Mascot waterfall — recording (press-to-talk) and the composer text (any
+  // keystroke is activity) feed the idle clock; everything else it subscribes
+  // to itself.
+  const mochi = useMochiState({ recording, activityKey: input })
   // Composer attachments (ChatGPT-style chips). Memory-only — queued ones
   // ride chat.ts's in-memory map keyed by the queued send id.
   const [pendingAttachments, setPendingAttachments] = useState<PendingAttachment[]>([])
@@ -679,7 +685,7 @@ export default function Chat() {
   return (
     <SafeAreaView style={s.safe} edges={['bottom']}>
       <ScreenShell
-        title={title || 'Relay'}
+        title={title || 'Moch'}
         onSearch={() => router.navigate('/(tabs)/sessions')}
         right={
           curModel ? (
@@ -1046,6 +1052,7 @@ export default function Chat() {
 
           {/* ── Composer: rounded pill, like ChatGPT ── */}
           <View style={[s.composerWrap, { paddingBottom: Math.max(insets.bottom, 10) }]}>
+            <Mascot mochi={mochi} />
             {queued.length > 0 ? (
               <View style={s.queueStrip}>
                 <View style={s.queueHead}>

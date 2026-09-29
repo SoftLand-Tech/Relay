@@ -32,7 +32,7 @@ function fmtTime(ts: number): string {
 const mdBase = {
   body: { color: C.text, fontSize: 16, lineHeight: 24 },
   paragraph: { marginTop: 0, marginBottom: 12 },
-  code_inline: { color: C.accent, backgroundColor: 'rgba(57,202,219,0.12)', borderRadius: 4, paddingHorizontal: 5, fontSize: 14.5 },
+  code_inline: { color: C.accent, backgroundColor: 'rgba(247,146,54,0.12)', borderRadius: 4, paddingHorizontal: 5, fontSize: 14.5 },
   fence: { color: C.text, backgroundColor: C.bgCard, borderRadius: 10, padding: 12, fontSize: 13, fontFamily: 'monospace' },
   code_block: { color: C.text, backgroundColor: C.bgCard, borderRadius: 10, padding: 12, fontSize: 13, fontFamily: 'monospace' },
   blockquote: { backgroundColor: 'transparent', borderLeftColor: C.border, marginLeft: 0, paddingLeft: 12 },

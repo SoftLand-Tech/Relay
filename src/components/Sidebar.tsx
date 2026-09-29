@@ -600,7 +600,7 @@ export function Sidebar({
         <View style={s.header}>
           <View style={s.brandRow}>
             <Image source={require('../../assets/logo.png')} style={s.brandLogo} />
-            <Text style={s.brand}>Relay</Text>
+            <Text style={s.brand}>Moch</Text>
           </View>
           <Pressable
             style={({ pressed }) => [s.iconBtn, pressed && s.iconBtnPressed]}
@@ -781,7 +781,7 @@ export function Sidebar({
           <Animated.View style={[s.dialogCard, { opacity: confirmAnim, transform: [{ scale: confirmScale }] }]}>
             <Text style={s.dialogTitle}>Delete this chat?</Text>
             <Text style={s.dialogBody}>
-              “{shownConfirm.title}” is permanently removed from Relay.
+              “{shownConfirm.title}” is permanently removed from Moch.
             </Text>
             {dialogError ? <Text style={s.dialogError}>{dialogError}</Text> : null}
             <View style={s.dialogButtons}>

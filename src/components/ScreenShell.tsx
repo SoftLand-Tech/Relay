@@ -225,7 +225,7 @@ export function ScreenShell({
         </Pressable>
 
         <View style={s.titleWrap}>
-          {showBrand ? <Text style={s.brand}>Relay</Text> : null}
+          {showBrand ? <Text style={s.brand}>Moch</Text> : null}
           <Text style={[s.title, showBrand && s.titleDim]} numberOfLines={1}>
             {title}
           </Text>

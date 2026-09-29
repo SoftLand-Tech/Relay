@@ -30,7 +30,7 @@ export default function Onboarding() {
     <SafeAreaView style={s.safe} edges={['top', 'bottom']}>
       <ScrollView style={s.root} contentContainerStyle={s.content} keyboardShouldPersistTaps="handled">
         <Text style={s.kicker}>SELF-HOSTED AGENT</Text>
-        <Text style={s.title}>Relay</Text>
+        <Text style={s.title}>Moch</Text>
         <Text style={s.sub}>Your agent, in your pocket.</Text>
 
         <PairForm onPaired={() => router.replace('/(tabs)/chat')} />

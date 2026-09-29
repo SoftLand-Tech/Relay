@@ -46,3 +46,7 @@ yarn-error.*
 
 # promo video working files
 videos/
+
+# local capture/verification output — contains paired-session screenshots and
+# capture scripts holding a dev gateway pairing token; never commit
+out/

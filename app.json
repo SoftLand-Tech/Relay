@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "Relay",
+    "name": "Moch",
     "slug": "hermes-mobile",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -31,7 +31,7 @@
         "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"
       ],
       "adaptiveIcon": {
-        "backgroundColor": "#0E181B",
+        "backgroundColor": "#000000",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
@@ -49,10 +49,10 @@
           "image": "./assets/splash-icon.png",
           "imageWidth": 200,
           "resizeMode": "contain",
-          "backgroundColor": "#0E181B",
+          "backgroundColor": "#000000",
           "dark": {
             "image": "./assets/splash-icon.png",
-            "backgroundColor": "#0E181B"
+            "backgroundColor": "#000000"
           },
           "android": {
             "image": "./assets/splash-icon-android.png",
@@ -73,7 +73,7 @@
       [
         "expo-notifications",
         {
-          "color": "#39CADB",
+          "color": "#F79236",
           "defaultChannel": "hermes-alerts"
         }
       ],

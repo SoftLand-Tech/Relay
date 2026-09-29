@@ -259,6 +259,32 @@ export const activeQueue = computed([sendQueue, activeStoredId], (map, stored): 
   (stored && map[stored]) || [],
 )
 
+// ── Mascot moments ─────────────────────────────────────────────────────────
+// One-shot edges the mascot waterfall consumes (useMochiState). Every atom is
+// sid-stamped: the hook accepts a moment only when `sid` matches the session
+// the user is looking at AT LAND TIME (a background chat's completion must
+// not animate the foreground mascot).
+
+/** Turn-shape moments: 'success' is promoted to a displayed 'celebration' by
+ *  the hook when its own busy-start timestamp says the turn ran ≥30s. */
+export const mochiMoment = atom<{
+  kind: 'success' | 'error' | 'celebration' | 'apologetic' | 'greeting'
+  sid: string
+  at: number
+} | null>(null)
+
+/** A user prompt left the composer — sendPrompt is the single funnel (direct
+ *  sends AND queued heads via maybeFlushQueue). Thank-you/shy regexes and the
+ *  task-received perk both read this. */
+export const mochiSent = atom<{ text: string; sid: string; at: number } | null>(null)
+
+/** The chat on screen has had its live handle released (session.reclaimed) —
+ *  the mascot's low-battery state. Keyed by the ACTIVE live id: sessionsById
+ *  is keyed by live ids, and a stored id can never index it. */
+export const activeDetached = computed([sessionsById, activeSession], (m, id) =>
+  !!(id && m[id]?.detached),
+)
+
 /** Failure strip for the chat screen. The optimistic switch/create already
  *  put the user ON the target chat when the RPC fails, so the failure must
  *  surface there (tap to retry) — not in an Alert on the screen they just
@@ -1101,6 +1127,9 @@ export function newChat(): Promise<string> {
   const pseudo = `new:${nid()}`
   sessionsById.set({ ...sessionsById.get(), [tempId]: { ...makeSession(tempId, pseudo), provisional: true } })
   activeSession.set(tempId)
+  // Mascot greeting — latched by the hook at land time (activeSession ===
+  // tempId right here), so it plays its full loop across runNewChat's re-key.
+  mochiMoment.set({ kind: 'greeting', sid: tempId, at: Date.now() })
   const p = runNewChat(tempId, pseudo).finally(() => {
     if (inflightCreate === p) inflightCreate = null
   })
@@ -1451,6 +1480,7 @@ export async function sendPrompt(
             },
           ],
         })
+        mochiMoment.set({ kind: 'error', sid: target!, at: Date.now() })
       }
       enqueueOffline(text)
       throw err
@@ -1476,6 +1506,9 @@ export async function sendPrompt(
         busy: true,
       })
     }
+    // The single funnel for the mascot's task-received / thank-you / shy
+    // reactions: direct sends and queued heads (maybeFlushQueue) both pass.
+    mochiSent.set({ text, sid, at: Date.now() })
     // The user is here and acting — drop any stale badge on this chat.
     clearAttentionLive(sid)
     schedulePersist(sid)
@@ -1548,6 +1581,7 @@ export async function stopRun() {
   }
   flushStreams()
   patchSession(sid, { busy: false })
+  mochiMoment.set({ kind: 'apologetic', sid, at: Date.now() })
   // A stop is a turn-end edge too — queued follow-ups get their turn.
   maybeFlushQueue(sid)
 }
@@ -2040,6 +2074,9 @@ export function hookChatEvents() {
             body: failed ? String(p.error ?? p.failure_reason ?? 'Turn failed') : finalText,
           },
         )
+        // Mascot: error on a failed turn; on success the hook promotes to a
+        // celebration when its own busy-start says the turn ran ≥30s.
+        mochiMoment.set({ kind: failed ? 'error' : 'success', sid: eSid, at: Date.now() })
         break
       }
 
@@ -2114,6 +2151,10 @@ export function hookChatEvents() {
           'done',
           { title: 'Background task done', body: String(p.text ?? JSON.stringify(p)) },
         )
+        // Mascot celebration branch of the map's success entry (a background
+        // win only animates when this chat is the one on screen — the hook's
+        // land-time sid gate).
+        mochiMoment.set({ kind: 'celebration', sid: eSid, at: Date.now() })
         break
       }
 
@@ -2143,6 +2184,7 @@ export function hookChatEvents() {
         sending = false
         schedulePersist(eSid)
         flagAttention(eSid, 'error', { title: 'Turn failed', body: msg })
+        mochiMoment.set({ kind: 'error', sid: eSid, at: Date.now() })
         // A failed turn still ends the turn — queued follow-ups go out.
         maybeFlushQueue(eSid)
         break

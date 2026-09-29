@@ -8,6 +8,7 @@ import * as SplashScreen from 'expo-splash-screen'
 import { initPush, lastNotificationResponse, onNotificationResponse, clearLastNotificationResponse, type NotificationTarget } from '../src/lib/push'
 import { AnimatedSplash } from '../src/components/AnimatedSplash'
 import { SessionToasts } from '../src/components/SessionToasts'
+import { MochiStage } from '../src/components/Mascot'
 import {
   isConnected as isConnectedAtom, connectionState, connConfig, loadSavedConfig,
   connect, gatewayError, retryNow, disconnect, reconnectAttempt, onForeground, redactedUrl,
@@ -165,6 +166,11 @@ export default function RootLayout() {
       </Stack>
       {!online && state !== 'idle' ? (
         <View style={s.overlay}>
+          {/* Mochi inside the veil — made VISIBLE so the connecting/offline
+              states actually show. The overlay instance mounts cold per
+              disconnect (~200-500ms low-end), so the status text below lands
+              first and Mochi fades in a beat later. */}
+          <MochiStage state={connecting ? 'mochi-connecting' : 'mochi-offline'} />
           {failed ? (
             <>
               <Text style={s.errTitle}>Connection failed</Text>

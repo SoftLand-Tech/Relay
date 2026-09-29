@@ -110,7 +110,7 @@ function SessionsInner() {
   }, [])
 
   const removeSession = useCallback((s: Sess) => {
-    Alert.alert('Delete this conversation?', s.title || s.preview || 'This permanently removes it from Relay.', [
+    Alert.alert('Delete this conversation?', s.title || s.preview || 'This permanently removes it from Moch.', [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Delete',

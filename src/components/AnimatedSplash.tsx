@@ -1,7 +1,7 @@
 /**
  * Animated cold-start brand splash.
  *
- * The native splash (config plugin) shows the logo statically on #0E181B;
+ * The native splash (config plugin) shows the logo statically on #000000;
  * this overlay takes over at mount with the same background and the same
  * logo width, so the handoff is invisible — then the logo settles into
  * place over two expanding cyan ripples, and the whole overlay fades out
@@ -78,7 +78,7 @@ export function AnimatedSplash({ onDone }: { onDone: () => void }) {
   }
 
   return (
-    <Animated.View style={[s.overlay, { opacity: fade }]} accessibilityLabel="Loading Relay">
+    <Animated.View style={[s.overlay, { opacity: fade }]} accessibilityLabel="Loading Moch">
       {/* Tap anywhere to skip — plain Views/Images above don't intercept. */}
       <Pressable
         style={StyleSheet.absoluteFill}
@@ -104,7 +104,7 @@ const s = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: '#0E181B', // same as the native splash backgroundColor
+    backgroundColor: '#000000', // same as the native splash backgroundColor
     alignItems: 'center',
     justifyContent: 'center',
   },

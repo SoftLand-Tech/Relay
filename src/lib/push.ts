@@ -297,7 +297,7 @@ export async function sendTestNotification(): Promise<void> {
   const ok = await ensureNotificationPermission()
   if (!ok) throw new Error('Notification permission denied.')
   await n.scheduleNotificationAsync({
-    content: { title: 'Relay', body: 'Notifications are working — approvals will buzz here.', data: { screen: 'chat' } },
+    content: { title: 'Moch', body: 'Notifications are working — approvals will buzz here.', data: { screen: 'chat' } },
     trigger: null,
   })
 }
