@@ -37,6 +37,11 @@
        duration cannot survive on the left eye. */
     #left-eye { animation: winkBlink 2.8s ease-in-out infinite; }
     @keyframes winkBlink { 0%,18%,100% { transform: scaleY(1); } 26%,64% { transform: scaleY(0.06) translateY(9px); } 72% { transform: scaleY(1); } }
+    /* Wink = LEFT eye only. The right eye must NOT co-blink: calmBlink's
+       full ~70ms close at 67–69.5% reads as a black flicker against the
+       dark visor (user-reported on tap). Hold it open for the whole loop. */
+    #right-eye { animation: eyeHoldOpen 2.8s linear infinite; }
+    @keyframes eyeHoldOpen { 0%, 100% { transform: scaleY(1); } }
     #blush { transform-origin: 627px 700px; animation: blushWarmth 2.8s ease-in-out infinite; will-change: opacity, transform; }
     @keyframes blushWarmth { 0%, 100% { opacity: 0.88; transform: scale(0.98); } 50% { opacity: 1; transform: scale(1.03); } }
 
