@@ -5,6 +5,7 @@ import { router } from 'expo-router'
 import { useStore } from '@nanostores/react'
 import { Ionicons } from '@expo/vector-icons'
 import { PairForm } from '../src/components/PairForm'
+import { MochiStage } from '../src/components/Mascot'
 import { servers as serversStore, switchToServer } from '../src/lib/gateway'
 import { C } from '../src/lib/theme'
 
@@ -29,6 +30,9 @@ export default function Onboarding() {
   return (
     <SafeAreaView style={s.safe} edges={['top', 'bottom']}>
       <ScrollView style={s.root} contentContainerStyle={s.content} keyboardShouldPersistTaps="handled">
+        {/* Mochi opens the app the way the splash leaves him: mid wake-up
+            loop — asleep, stretch, awake, back to sleep while you pair. */}
+        <MochiStage state="mochi-waking-up" size={168} marginBottom={0} />
         <Text style={s.kicker}>SELF-HOSTED AGENT</Text>
         <Text style={s.title}>Moch</Text>
         <Text style={s.sub}>Your agent, in your pocket.</Text>

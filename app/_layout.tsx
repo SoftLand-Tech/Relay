@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { Stack, router } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
-import { View, ActivityIndicator, Text, Pressable, StyleSheet, AppState, Modal } from 'react-native'
+import { View, Text, Pressable, StyleSheet, AppState, Modal } from 'react-native'
 import { useStore } from '@nanostores/react'
 import * as Linking from 'expo-linking'
 import * as SplashScreen from 'expo-splash-screen'
@@ -169,8 +169,10 @@ export default function RootLayout() {
           {/* Mochi inside the veil — made VISIBLE so the connecting/offline
               states actually show. The overlay instance mounts cold per
               disconnect (~200-500ms low-end), so the status text below lands
-              first and Mochi fades in a beat later. */}
-          <MochiStage state={connecting ? 'mochi-connecting' : 'mochi-offline'} />
+              first and Mochi fades in a beat later. Connecting uses the
+              patient waiting loop (rock + wandering gaze) — the connecting
+              pose itself ships static, so waiting IS the loading animation. */}
+          <MochiStage state={connecting ? 'mochi-waiting' : 'mochi-offline'} size={168} />
           {failed ? (
             <>
               <Text style={s.errTitle}>Connection failed</Text>
@@ -195,7 +197,6 @@ export default function RootLayout() {
             </>
           ) : connecting ? (
             <>
-              <ActivityIndicator color={C.accent} size="large" />
               <Text style={s.connecting}>Connecting to your agent…{attempt > 0 ? ` (try ${attempt + 1})` : ''}</Text>
               <Pressable style={({ pressed }) => [s.ghostBtn, pressed && s.pressed]} onPress={() => { disconnect() }}>
                 <Text style={s.ghostText}>Cancel</Text>
@@ -257,7 +258,7 @@ const s = StyleSheet.create({
   btnText: { color: C.onAccent, fontSize: 15, fontWeight: '800' },
   ghostBtn: { borderRadius: 12, paddingVertical: 14, paddingHorizontal: 22, borderWidth: 1, borderColor: C.border, marginTop: 12 },
   ghostText: { color: C.textDim, fontSize: 15, fontWeight: '600' },
-  connecting: { color: C.textDim, marginTop: 14, marginBottom: 8 },
+  connecting: { color: C.textDim, marginTop: 2, marginBottom: 8 },
   toast: { position: 'absolute', bottom: 40, left: 20, right: 20, backgroundColor: C.bgElev, borderRadius: 12, padding: 14, borderWidth: 1, borderColor: C.border },
   toastText: { color: C.text, fontSize: 13.5, textAlign: 'center' },
   pickerScrim: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', alignItems: 'center', justifyContent: 'center', padding: 24 },
