@@ -3,43 +3,48 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Relay — your own AI agent, in your pocket</title>
-  <meta name="description" content="Relay is a free, open-source phone app for your self-hosted AI agent. Your phone talks straight to your computer — no platform in between, no accounts." />
+  <title>Moch — your own AI agent, in your pocket</title>
+  <meta name="description" content="Moch is a free, open-source phone app for your self-hosted AI agent. Your phone talks straight to your computer — no platform in between, no accounts." />
   <link rel="icon" href="assets/favicon.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700;12..96,800&family=Hanken+Grotesk:wght@400;600;700&display=swap" />
-  <link rel="stylesheet" href="relay.css" />
+  <link rel="stylesheet" href="moch.css" />
 </head>
 <body>
 <!--
   THESIS: a self-hosted agent deserves a phone app that talks straight to it —
   this landing refuses the SaaS-landing habit of stock hero + feature card grid,
   and proves the product with miniature copies of its own UI.
-  OWN-WORLD: calm night-teal field (#0E181B), cyan reserved for action and the
-  Relay side of every comparison; Plus Jakarta Sans display voice; authored
-  1.6px-stroke SVG icons; CSS miniatures of the real chat UI as illustrations.
-  STORY: the visitor gets what Relay is in one line, sees the honest
+  OWN-WORLD: the Mocheme theme the app ships today — near-black indigo
+  (#0A0813), the single saturated accent is Moch's antenna orange #F79236,
+  cream #F6ECE1 carries the user's own words (the app's user bubble), and Moch
+  the mascot is the friendly face at five moments: riding the hero phone,
+  avataring the agent, thinking, asking permission, waving goodbye (the hero
+  phone needs no overlay — the capture's own mascot is Moch). Bricolage
+  Grotesque display voice; authored 1.6px-stroke SVG icons; CSS miniatures of
+  the real chat UI (cream bubbles, dashed thinking pill, gradient send) as
+  illustrations.
+  STORY: the visitor gets what Moch is in one line, sees the honest
   bot-versus-app comparison, believes the direct-connection story, and lands on
-  a beginner-safe setup guide that installs Hermes first, then Relay, then pairs
+  a beginner-safe setup guide that installs Hermes first, then Moch, then pairs
   them with a QR code.
-  FIRST VIEWPORT: left column carries a six-word headline with one cyan word,
+  FIRST VIEWPORT: left column carries a six-word headline with one orange word,
   a two-sentence plain-language lede, two pills (Get started, GitHub); right
-  column a floating phone showing the real streaming screen. Primary action is
-  the cyan Get started pill.
+  column a floating phone showing the real streaming screen with Moch sitting
+  on top of it. Primary action is the gradient Get started pill.
   FORM: user-pinned direction (warm consumer voice inside the app's brand
   world; no emojis, no terminal aesthetic, no screenshot gallery) — pinned by
   the owner's brief, no seed roll.
-  FINISH: unreviewed and undocumented is unfinished; this build ends with the
-  finish review, the verdict, DESIGN.md, and every shipping raster carrying its
-  provenance.
+  FINISH: unreviewed and undocumented is unfinished; every shipping raster
+  carries its provenance.
 -->
 
 <header class="topbar">
   <div class="topbar-inner">
     <a class="brand" href="./">
       <img src="assets/logo.png" alt="" />
-      <span class="word">Relay</span>
+      <span class="word">Moch</span>
     </a>
     <nav class="topnav">
       <a class="link" href="setup.html">How to set it up</a>
@@ -59,7 +64,7 @@
     <div>
       <h1>Your own AI. <em>In your pocket.</em></h1>
       <p class="lede">
-        Relay is a free, open-source phone app for the AI agent running on your
+        Moch is a free, open-source phone app for the AI agent running on your
         own computer. Your phone talks straight to it: no platform in between,
         no accounts, no monthly fee.
       </p>
@@ -74,7 +79,7 @@
       </div>
     </div>
     <div class="phone">
-      <img src="screenshots/03-streaming.png" alt="Relay streaming an answer with its thinking visible" width="286" />
+      <img src="screenshots/03-streaming.png" alt="Moch streaming an answer with its thinking visible" width="286" />
     </div>
   </div>
 </section>
@@ -83,7 +88,7 @@
   <div class="wrap">
     <div class="section-head">
       <h2>How it fits together</h2>
-      <p>No cloud, no middleman. Two things you own, talking to each other. The agent is the thinker; the gateway is its front door; Relay is the phone in your hand.</p>
+      <p>No cloud, no middleman. Two things you own, talking to each other. The agent is the thinker; the gateway is its front door; Moch is the phone in your hand.</p>
     </div>
     <div class="how-grid">
     <div class="ledger">
@@ -97,8 +102,8 @@
       <div class="step">
         <div class="dot"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="7" y="2.5" width="10" height="19" rx="3"/><path d="M11 18.5h2"/></svg></div>
         <div>
-          <h3>Relay is its remote control</h3>
-          <p>Install Relay on your phone, scan one QR code, and the two are paired. From then on the app opens a direct line to your agent whenever you use it.</p>
+          <h3>Moch is its remote control</h3>
+          <p>Install Moch on your phone, scan one QR code, and the two are paired. From then on the app opens a direct line to your agent whenever you use it.</p>
         </div>
       </div>
       <div class="step">
@@ -111,7 +116,7 @@
     </div>
     <aside class="fig banter" aria-label="A short chat between you and your agent">
       <div class="banter-head">
-        <span class="dot-on"></span>
+        <img class="moch-avatar" src="assets/moch/mochi-listening.svg" alt="" />
         <span class="who-name">Your agent</span>
         <span class="who-where">on your desk</span>
       </div>
@@ -143,7 +148,7 @@
         <div class="diff-row"><span class="q">WHAT IT COSTS YOU</span>An account and a bot token on someone else's platform.</div>
       </div>
       <div class="diff-col us">
-        <p class="who">Relay</p>
+        <p class="who">Moch</p>
         <p class="who-sub">A direct line to your own machine.</p>
         <div class="diff-row"><span class="q">WHERE MESSAGES GO</span>Straight from your phone to your computer. Nothing in between.</div>
         <div class="diff-row"><span class="q">WHAT AN ANSWER LOOKS LIKE</span>Thinking you can open, code that's formatted, lists that are lists.</div>
@@ -152,7 +157,7 @@
         <div class="diff-row"><span class="q">WHAT IT COSTS YOU</span>Nothing. Your device, your server, that's the whole relationship.</div>
       </div>
     </div>
-    <p class="diff-note">Both are front doors to the same agent, and you can happily run them side by side. Relay is for when your phone deserves better than a text box.</p>
+    <p class="diff-note">Both are front doors to the same agent, and you can happily run them side by side. Moch is for when your phone deserves better than a text box.</p>
   </div>
 </section>
 
@@ -170,6 +175,7 @@
       </div>
       <div class="feature-fig">
         <div class="fig">
+          <img class="moch-mini" src="assets/moch/mochi-deep-thinking.svg" alt="Moch deep in thought" />
           <span class="chip-live"><span class="pulse"></span>Thinking <b>· 14s · 23 tok/s</b></span>
           <p class="cap">A live reply, mid-thought</p>
         </div>
@@ -183,6 +189,7 @@
       </div>
       <div class="feature-fig">
         <div class="fig">
+          <img class="moch-mini" src="assets/moch/mochi-approval.svg" alt="Moch asking for your approval" />
           <div class="ask-card">
             <div class="t">Install 2 packages?</div>
             <div class="d">Your agent wants to add requests and rich to its Python environment.</div>
@@ -212,7 +219,7 @@
     <div class="feature">
       <div class="feature-copy">
         <h3>Two computers, one app</h3>
-        <p>Pair your desk and your laptop, even the same machine twice, once for home and once for the road. Relay remembers them all and reconnects to the last one on its own.</p>
+        <p>Pair your desk and your laptop, even the same machine twice, once for home and once for the road. Moch remembers them all and reconnects to the last one on its own.</p>
       </div>
       <div class="feature-fig">
         <div class="fig">
@@ -229,7 +236,7 @@
     <div class="feature">
       <div class="feature-copy">
         <h3>Every skill your agent has</h3>
-        <p>Type a slash and Relay asks your agent what it can do (commands, skills, models), straight from the source. Your agent learns a new trick tonight, your phone knows it tonight. No app update needed.</p>
+        <p>Type a slash and Moch asks your agent what it can do (commands, skills, models), straight from the source. Your agent learns a new trick tonight, your phone knows it tonight. No app update needed.</p>
       </div>
       <div class="feature-fig">
         <div class="fig">
@@ -247,8 +254,9 @@
 
 <section class="close">
   <div class="wrap">
+    <img class="moch-sendoff" src="assets/moch/mochi-celebration.svg" alt="Moch celebrating" />
     <h2>An evening project. Yours forever.</h2>
-    <p>The setup guide walks the whole way: install the agent, put Relay on your phone, scan one code.</p>
+    <p>The setup guide walks the whole way: install the agent, put Moch on your phone, scan one code.</p>
     <a class="btn" href="setup.html">Start the setup guide</a>
   </div>
 </section>
@@ -257,7 +265,7 @@
 
 <footer>
   <div class="wrap">
-    <span>Relay</span>
+    <span>Moch</span>
     <span class="sep">·</span>
     <a href="setup.html">Setup guide</a>
     <span class="sep">·</span>

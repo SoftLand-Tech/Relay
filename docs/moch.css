@@ -1,24 +1,34 @@
 /*
-  Relay — site stylesheet
-  World: calm night-teal, friendly consumer voice. Cyan carries action and the
-  product column; everything else is tinted teal, never gray. Bricolage Grotesque display
-  over Hanken Grotesk body, one motion moment (the floating phone + live chip).
+  Moch — site stylesheet
+  World: the Mocheme theme the app ships today. Near-black indigo surfaces
+  (#0A0813, hue ~249°), one saturated accent — Moch's antenna orange #F79236 —
+  reserved for action, cream #F6ECE1 for the user's own words (the app's user
+  bubble), and Moch the mascot as the friendly face. Bricolage Grotesque
+  display voice over Hanken Grotesk body; the miniature phone UI uses the
+  app's own vocabulary: cream bubbles, dashed thinking pill, gradient send.
 */
 
 :root {
-  --bg: #0e181b;
-  --bg-2: #101f23;
-  --card: #14262b;
-  --card-2: #182c32;
-  --line: #1d363c;
-  --line-2: #27454c;
-  --ink: #ecf6f7;
-  --ink-2: #a9c3c7;
-  --ink-3: #7e9aa0;
-  --accent: #39cadb;
-  --accent-soft: rgba(57, 202, 219, 0.14);
-  --accent-line: rgba(57, 202, 219, 0.38);
-  --accent-ink: #072024;
+  --bg: #0a0813;
+  --bg-2: #100e1a;
+  --card: #151220;
+  --card-2: #1a1727;
+  --line: #201c2d;
+  --line-2: #2b283b;
+  --ink: #ffffff;
+  --ink-2: #b4b1c4;
+  --ink-3: #86829b;
+  --accent: #f79236;
+  --accent-2: #fa9f3c;
+  --accent-deep: #e76437;
+  --on-accent: #2e1a08;
+  --accent-soft: rgba(247, 146, 54, 0.12);
+  --accent-line: rgba(247, 146, 54, 0.4);
+  --send-grad: linear-gradient(160deg, #e76437 0%, #f89236 55%, #fa9f3c 100%);
+  --cream: #f8efe5;
+  --cream-soft: #f6ece1;
+  --cream-line: rgba(248, 239, 229, 0.25);
+  --blush: #fa9b6a;
   --radius: 18px;
   --radius-s: 12px;
   --font: "Hanken Grotesk", system-ui, -apple-system, "Segoe UI", sans-serif;
@@ -40,7 +50,7 @@ body {
   text-rendering: optimizeLegibility;
 }
 
-::selection { background: var(--accent); color: var(--accent-ink); }
+::selection { background: var(--accent); color: var(--on-accent); }
 
 :focus-visible {
   outline: 2px solid var(--accent);
@@ -57,17 +67,17 @@ h1, h2, h3 { letter-spacing: -0.028em; font-weight: 800; font-family: var(--font
 
 .btn {
   display: inline-flex; align-items: center; gap: 9px;
-  background: var(--accent); color: var(--accent-ink);
+  background: var(--send-grad); color: var(--on-accent);
   font: 700 15px/1 var(--font-d);
   padding: 13px 22px; border-radius: 999px;
   border: 1px solid transparent;
-  box-shadow: 0 10px 26px rgba(57, 202, 219, 0.22), 0 1px 0 rgba(255, 255, 255, 0.25) inset;
+  box-shadow: 0 10px 26px rgba(247, 146, 54, 0.24), 0 1px 0 rgba(255, 255, 255, 0.22) inset;
   transition: transform 0.14s ease, box-shadow 0.14s ease;
 }
 .btn:hover {
   text-decoration: none;
   transform: translateY(-1px);
-  box-shadow: 0 14px 30px rgba(57, 202, 219, 0.3), 0 1px 0 rgba(255, 255, 255, 0.25) inset;
+  box-shadow: 0 14px 30px rgba(247, 146, 54, 0.32), 0 1px 0 rgba(255, 255, 255, 0.22) inset;
 }
 .btn svg { width: 15px; height: 15px; }
 
@@ -81,7 +91,7 @@ h1, h2, h3 { letter-spacing: -0.028em; font-weight: 800; font-family: var(--font
 /* ---------- top bar ---------- */
 .topbar {
   position: sticky; top: 0; z-index: 30;
-  background: rgba(14, 24, 27, 0.88);
+  background: rgba(10, 8, 19, 0.88);
   -webkit-backdrop-filter: blur(12px);
   backdrop-filter: blur(12px);
   border-bottom: 1px solid var(--line);
@@ -105,7 +115,7 @@ h1, h2, h3 { letter-spacing: -0.028em; font-weight: 800; font-family: var(--font
 .hero::before {
   content: ""; position: absolute; inset: -40% -20% auto auto;
   width: 720px; height: 720px; border-radius: 50%;
-  background: radial-gradient(closest-side, rgba(57, 202, 219, 0.13), transparent 70%);
+  background: radial-gradient(closest-side, rgba(247, 146, 54, 0.1), transparent 70%);
   pointer-events: none;
 }
 .hero-grid {
@@ -128,27 +138,31 @@ h1, h2, h3 { letter-spacing: -0.028em; font-weight: 800; font-family: var(--font
 .hero-foot span { display: inline-flex; align-items: center; gap: 8px; }
 .hero-foot svg { width: 15px; height: 15px; color: var(--accent); flex: none; }
 
-/* the phone: one authored motion moment */
+/* the phone: one authored motion moment — and Moch rides on top of it */
 .phone {
   justify-self: center; position: relative;
   border: 1px solid var(--line-2);
   border-radius: 40px; padding: 11px;
-  background: linear-gradient(180deg, var(--card-2), var(--bg-2));
+  background: linear-gradient(180deg, var(--card-2), var(--bg));
   box-shadow: 0 44px 90px rgba(0, 0, 0, 0.55), 0 6px 22px rgba(0, 0, 0, 0.4);
   animation: float 7s ease-in-out infinite;
 }
 .phone::after { /* speaker slit — a phone, not a picture of one */
   content: ""; position: absolute; top: 21px; left: 50%; translate: -50% 0;
   width: 74px; height: 6px; border-radius: 99px;
-  background: #0a1316; border: 1px solid var(--line);
+  background: #060d0f; border: 1px solid var(--line);
 }
 .phone img {
   display: block; width: 286px; height: auto;
-  border-radius: 30px; background: #0b1518;
+  border-radius: 30px; background: var(--bg);
 }
 @keyframes float {
   0%, 100% { transform: translateY(0) rotate(0.8deg); }
   50% { transform: translateY(-9px) rotate(0.2deg); }
+}
+@keyframes bob {
+  0%, 100% { transform: translateY(0) rotate(-3deg); }
+  50% { transform: translateY(-6px) rotate(2deg); }
 }
 
 /* ---------- sections ---------- */
@@ -184,10 +198,10 @@ h1, h2, h3 { letter-spacing: -0.028em; font-weight: 800; font-family: var(--font
 
 .banter { padding: 18px 18px 12px; display: flex; flex-direction: column; }
 .banter-head {
-  display: flex; align-items: baseline; gap: 9px;
+  display: flex; align-items: center; gap: 9px;
   padding: 2px 2px 12px; border-bottom: 1px solid var(--line); margin-bottom: 12px;
 }
-.banter-head .dot-on { align-self: center; }
+.banter-head .moch-avatar { width: 26px; height: 26px; flex: none; }
 .banter-head .who-name { font: 800 14.5px/1 var(--font-d); }
 .banter-head .who-where { color: var(--ink-3); font-size: 12.5px; margin-left: auto; }
 
@@ -197,9 +211,10 @@ h1, h2, h3 { letter-spacing: -0.028em; font-weight: 800; font-family: var(--font
   max-width: 86%; padding: 9px 13px; font-size: 13.5px; line-height: 1.5;
   border-radius: 15px;
 }
+/* The user's words sit in the app's cream bubble with the app's ink. */
 .b-row.you .bub {
-  background: var(--accent-soft); border: 1px solid var(--accent-line);
-  border-bottom-right-radius: 5px; color: var(--ink);
+  background: var(--cream-soft); border: 1px solid var(--cream-line);
+  border-bottom-right-radius: 5px; color: #2b283b;
 }
 .b-row.it .bub {
   background: var(--card-2); border: 1px solid var(--line-2);
@@ -219,13 +234,13 @@ h1, h2, h3 { letter-spacing: -0.028em; font-weight: 800; font-family: var(--font
 .diff-col .who-sub { color: var(--ink-3); font-size: 14px; margin: 0 0 18px; }
 .diff-col.them { background: var(--bg-2); color: var(--ink-2); }
 .diff-col.us {
-  background: linear-gradient(180deg, rgba(57, 202, 219, 0.09), rgba(57, 202, 219, 0.03));
+  background: linear-gradient(180deg, rgba(247, 146, 54, 0.09), rgba(247, 146, 54, 0.03));
   border-top: 2px solid var(--accent);
 }
 .diff-col.us .who { color: var(--accent); }
 .diff-row { padding: 13px 0; border-top: 1px solid var(--line); font-size: 15px; }
 .diff-row .q { font-weight: 700; color: var(--ink-3); font-size: 12.5px; text-transform: none; letter-spacing: 0.06em; display: block; margin-bottom: 4px; }
-.diff-col.us .diff-row { border-top-color: rgba(57, 202, 219, 0.16); }
+.diff-col.us .diff-row { border-top-color: rgba(247, 146, 54, 0.16); }
 .diff-col.us .diff-row .q { color: var(--accent); }
 .diff-note { color: var(--ink-3); font-size: 14.5px; margin: 18px 4px 0; max-width: 70ch; }
 
@@ -249,21 +264,23 @@ h1, h2, h3 { letter-spacing: -0.028em; font-weight: 800; font-family: var(--font
   box-shadow: 0 18px 40px rgba(0, 0, 0, 0.35);
 }
 .fig .cap { font-size: 12px; color: var(--ink-3); margin-top: 10px; letter-spacing: 0.04em; }
+.fig .moch-mini { width: 74px; height: auto; display: block; margin: 2px auto 8px; filter: drop-shadow(0 6px 12px rgba(0, 0, 0, 0.35)); }
 
+/* the app's dashed thinking pill, with the blush pulse */
 .chip-live {
   display: inline-flex; align-items: center; gap: 8px;
   font: 600 12.5px/1 var(--font); color: var(--ink-2);
-  border: 1px solid var(--line-2); border-radius: 99px; padding: 8px 13px;
+  border: 1.5px dashed var(--cream-line); border-radius: 99px; padding: 8px 13px;
 }
 .chip-live .pulse {
-  width: 7px; height: 7px; border-radius: 50%; background: var(--accent);
+  width: 7px; height: 7px; border-radius: 50%; background: var(--blush);
   animation: pulse 1.6s ease-out infinite;
 }
 .chip-live b { color: var(--ink); font-weight: 700; }
 @keyframes pulse {
-  0% { box-shadow: 0 0 0 0 rgba(57, 202, 219, 0.45); }
-  70% { box-shadow: 0 0 0 8px rgba(57, 202, 219, 0); }
-  100% { box-shadow: 0 0 0 0 rgba(57, 202, 219, 0); }
+  0% { box-shadow: 0 0 0 0 rgba(250, 155, 106, 0.45); }
+  70% { box-shadow: 0 0 0 8px rgba(250, 155, 106, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(250, 155, 106, 0); }
 }
 
 .ask-card {
@@ -276,7 +293,7 @@ h1, h2, h3 { letter-spacing: -0.028em; font-weight: 800; font-family: var(--font
 .mini-btn {
   font: 700 12.5px/1 var(--font-d); border-radius: 99px; padding: 8px 15px;
 }
-.mini-btn.go { background: var(--accent); color: var(--accent-ink); }
+.mini-btn.go { background: var(--send-grad); color: var(--on-accent); }
 .mini-btn.no { border: 1px solid var(--line-2); color: var(--ink-2); }
 
 .cron-row {
@@ -293,7 +310,7 @@ h1, h2, h3 { letter-spacing: -0.028em; font-weight: 800; font-family: var(--font
 }
 .toggle::after {
   content: ""; position: absolute; top: 2.5px; right: 3px;
-  width: 16px; height: 16px; border-radius: 50%; background: var(--accent-ink);
+  width: 16px; height: 16px; border-radius: 50%; background: var(--on-accent);
 }
 
 .pair-fig { display: flex; flex-direction: column; gap: 9px; }
@@ -313,6 +330,7 @@ h1, h2, h3 { letter-spacing: -0.028em; font-weight: 800; font-family: var(--font
 
 /* ---------- closing ---------- */
 .close { text-align: center; padding: 96px 0 100px; border-top: 1px solid var(--line); }
+.close .moch-sendoff { width: 96px; height: auto; margin: 0 auto 6px; display: block; filter: drop-shadow(0 10px 22px rgba(0, 0, 0, 0.4)); }
 .close h2 { font-family: var(--font-d); font-size: clamp(30px, 4vw, 42px); margin: 0 0 14px; }
 .close p { color: var(--ink-2); max-width: 44ch; margin: 0 auto 30px; }
 

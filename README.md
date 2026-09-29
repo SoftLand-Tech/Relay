@@ -21,7 +21,7 @@ The web build at phone size, connected to a real gateway:
   </tr>
   <tr>
     <td><img src="docs/screenshots/04-reply.png" width="200" alt="Finished reply rendered as Markdown: bullets and a cron code block"></td>
-    <td><img src="docs/screenshots/05-sidebar.png" width="200" alt="Sidebar: chat search, grouped chat list (Today, Yesterday, …), pin/archive marks"></td>
+    <td><img src="docs/screenshots/05-sidebar.png" width="200" alt="Sidebar with chat search active: typing filters the chat list to matching titles"></td>
     <td><img src="docs/screenshots/07-models.png" width="200" alt="Models screen: provider and model picker, reasoning effort, show-thinking toggle"></td>
   </tr>
   <tr>
@@ -30,7 +30,7 @@ The web build at phone size, connected to a real gateway:
     <td align="center"><sub>Models & reasoning</sub></td>
   </tr>
   <tr>
-    <td><img src="docs/screenshots/08-automations.png" width="200" alt="Automations screen: cron jobs with schedules, run-now and pause"></td>
+    <td><img src="docs/screenshots/08-automations.png" width="200" alt="New-automation editor: name, plain-language schedule and prompt fields — switches, not syntax"></td>
     <td><img src="docs/screenshots/09-skills.png" width="200" alt="Skills screen: slash commands and skills served by the gateway"></td>
     <td><img src="docs/screenshots/10-settings.png" width="200" alt="Settings: remembered computers and notification options"></td>
   </tr>

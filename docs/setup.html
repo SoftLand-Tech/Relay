@@ -3,13 +3,13 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Setup guide — Relay</title>
-  <meta name="description" content="Install the Hermes agent on your computer, put Relay on your phone, and pair them with one QR code. A beginner-friendly walkthrough." />
+  <title>Setup guide — Moch</title>
+  <meta name="description" content="Install the Hermes agent on your computer, put Moch on your phone, and pair them with one QR code. A beginner-friendly walkthrough." />
   <link rel="icon" href="assets/favicon.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700;12..96,800&family=Hanken+Grotesk:wght@400;600;700&display=swap" />
-  <link rel="stylesheet" href="relay.css" />
+  <link rel="stylesheet" href="moch.css" />
 </head>
 <body>
 
@@ -17,7 +17,7 @@
   <div class="topbar-inner">
     <a class="brand" href="./">
       <img src="assets/logo.png" alt="" />
-      <span class="word">Relay</span>
+      <span class="word">Moch</span>
     </a>
     <nav class="topnav">
       <a class="link" href="index.html">Home</a>
@@ -38,7 +38,7 @@
     </div>
     <p class="lede">
       By the end of this page you'll have an AI agent running on your own
-      computer and the Relay app on your phone, paired and talking. No accounts
+      computer and the Moch app on your phone, paired and talking. No accounts
       anywhere, and everything you install belongs to you.
     </p>
     <p class="lede">
@@ -48,7 +48,7 @@
 
     <h2><span class="n">1</span>Put the agent on your computer</h2>
     <p>
-      Relay is the remote control; the thinking happens in
+      Moch is the remote control; the thinking happens in
       <strong>Hermes</strong>, a free, open-source agent that runs on your own
       machine. Installing it is one line in a terminal:
     </p>
@@ -94,14 +94,14 @@ hermes gateway start</code></pre>
       the gateway running (a terminal window is fine for tonight).
     </p>
 
-    <h2><span class="n">3</span>Put Relay on your phone</h2>
+    <h2><span class="n">3</span>Put Moch on your phone</h2>
     <p>
-      Relay is young: it's not in the app stores yet, so tonight we run it the
+      Moch is young: it's not in the app stores yet, so tonight we run it the
       developer way. It takes three minutes and needs no coding:
     </p>
     <ul class="checklist">
       <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg><span>On your phone, install <strong>Expo Go</strong> from the App Store or Play Store (a free helper app for running projects like this).</span></li>
-      <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg><span>On the computer, download Relay and start it:</span></li>
+      <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg><span>On the computer, download Moch and start it:</span></li>
     </ul>
     <div class="term">
       <button class="copy" type="button">Copy</button>
@@ -112,7 +112,7 @@ npm start</code></pre>
     </div>
     <p>
       A QR code appears in the terminal. Scan it with <strong>Expo Go</strong>
-      and Relay opens on your phone. (You'll need
+      and Moch opens on your phone. (You'll need
       <a href="https://nodejs.org">Node.js</a> installed for this part;
       the long-term-support version is fine.)
     </p>
@@ -120,7 +120,7 @@ npm start</code></pre>
     <h2><span class="n">4</span>Pair the two</h2>
     <p>
       One last command on the computer. It prints a QR code (or a link, if
-      your terminal can't draw one) that tells Relay where your gateway lives
+      your terminal can't draw one) that tells Moch where your gateway lives
       and lets it in:
     </p>
     <div class="term">
@@ -130,9 +130,9 @@ npm start</code></pre>
     <p>
       Use your own two numbers in place of the example: the address of the
       computer on your home network, and the port your gateway mentioned when
-      it started in step 2. Then point Relay's camera at the QR code, and
+      it started in step 2. Then point Moch's camera at the QR code, and
       that's it. The app remembers this computer and reconnects to it on its
-      own from now on. No camera handy? Tap <em>More options</em> in Relay and
+      own from now on. No camera handy? Tap <em>More options</em> in Moch and
       paste the link the script printed.
     </p>
     <div class="aside">
@@ -150,13 +150,13 @@ npm start</code></pre>
       well-regarded tool that quietly connects your devices to each other over
       the internet) on both the computer and the phone. Then pair once more
       using the computer's Tailscale address with the <code>--tls</code> flag,
-      and you have a second entry in Relay's computer list for the road.
+      and you have a second entry in Moch's computer list for the road.
     </p>
 
     <h2>If something doesn't work</h2>
     <ul>
-      <li><strong>Relay says it can't reach the computer</strong>: make sure the gateway is still running and both devices are on the same network (or Tailscale is on, on both).</li>
-      <li><strong>The QR scan does nothing</strong>: use the script's printed link: in Relay tap <em>More options</em> and paste the <code>hermes://connect…</code> line.</li>
+      <li><strong>Moch says it can't reach the computer</strong>: make sure the gateway is still running and both devices are on the same network (or Tailscale is on, on both).</li>
+      <li><strong>The QR scan does nothing</strong>: use the script's printed link: in Moch tap <em>More options</em> and paste the <code>hermes://connect…</code> line.</li>
       <li><strong>Wrong port</strong>: the pairing command prints the address it's using; check it matches what your gateway said when it started.</li>
     </ul>
     <p>
@@ -170,7 +170,7 @@ npm start</code></pre>
 
 <footer>
   <div class="wrap">
-    <span>Relay</span>
+    <span>Moch</span>
     <span class="sep">·</span>
     <a href="index.html">Home</a>
     <span class="sep">·</span>
