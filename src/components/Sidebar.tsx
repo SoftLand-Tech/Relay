@@ -551,7 +551,7 @@ export function Sidebar({
     // First run: only the edge strip is mounted — nothing under the closed
     // drawer is blocked, and no invisible control exists to tab into.
     return (
-      <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
+      <View style={[StyleSheet.absoluteFill, s.layerZ]} pointerEvents="box-none">
         <View
           style={[s.edgeStrip, { top: insets.top + EDGE_TOP_GAP }]}
           pointerEvents="box-only"
@@ -576,7 +576,7 @@ export function Sidebar({
   return (
     // box-none: the overlay itself never blocks the screen underneath — only
     // the edge strip (while closed) and the scrim/panel (while open) catch.
-    <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
+    <View style={[StyleSheet.absoluteFill, s.layerZ]} pointerEvents="box-none">
       {/* Left-edge catch strip (A2-21). Starts below the top bar so it never
           covers the hamburger; 28dp wide, no hitSlop (accepted dead zone). */}
       <View
@@ -919,6 +919,10 @@ const RecentRow = React.memo(function RecentRow({
 })
 
 const makeS = () => StyleSheet.create({
+  // Explicit stacking floor: the drawer's subtree must paint above the chat
+  // screen's floating elements (the model chip carries a zIndex of its own
+  // and was drawing over the open drawer on Android).
+  layerZ: { zIndex: 50, elevation: 50 },
   // Left-edge catch strip for the swipe-to-open gesture. `top` is set inline
   // (insets.top + EDGE_TOP_GAP) to clear the top bar/hamburger.
   edgeStrip: {

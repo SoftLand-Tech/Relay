@@ -225,7 +225,7 @@ export function ScreenShell({
         <View style={[s.topBarTray, { paddingTop: insets.top + 8 }]}>
           <View
             pointerEvents="none"
-            style={[s.trayTitleAbs, { top: insets.top + 8, bottom: 8, paddingHorizontal: 44 }]}
+            style={[s.trayTitleAbs, { top: insets.top + 8, bottom: 8, paddingHorizontal: 64 }]}
           >
             <View style={s.trayTitleWrap}>
               {showBrand ? <Text style={s.trayBrand}>Moch</Text> : null}
