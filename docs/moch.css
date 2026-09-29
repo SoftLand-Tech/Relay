@@ -122,7 +122,9 @@ h1, h2, h3 { letter-spacing: -0.028em; font-weight: 800; font-family: var(--font
   position: relative;
   display: grid; grid-template-columns: 1.05fr 0.95fr;
   gap: 30px; align-items: center;
-  padding: 92px 0 84px;
+  /* padding-block, not padding: this div also carries .wrap, whose 26px
+     side padding must survive — a shorthand here zeroed it on phones. */
+  padding-block: 92px 84px;
 }
 .hero h1 {
   font-size: clamp(40px, 5.6vw, 62px);
@@ -386,7 +388,7 @@ footer .sep { opacity: 0.5; }
 
 /* ---------- responsive ---------- */
 @media (max-width: 940px) {
-  .hero-grid { grid-template-columns: 1fr; padding: 64px 0 60px; }
+  .hero-grid { grid-template-columns: 1fr; padding-block: 64px 60px; }
   .how-grid { grid-template-columns: 1fr; gap: 30px; }
   .how-grid .banter { max-width: 380px; }
   .phone { margin-top: 18px; }
@@ -402,6 +404,7 @@ footer .sep { opacity: 0.5; }
   .hero h1 { font-size: 40px; }
   .phone img { width: 246px; }
   .section { padding: 64px 0; }
+  .topnav .link { display: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {
