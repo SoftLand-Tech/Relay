@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Mochi — 31. Head Pat</title>
+  <title>Mochi — 33. Head Pat Release</title>
   <style>
     *, *::before, *::after {
       box-sizing: border-box;
@@ -42,84 +42,80 @@
     }
 
     /* =========================================================
-       ANIMATION: 31. Head Pat (0.6s one-shot, holds)
-       Touch feedback: squishes down like real mochi dough and STAYS
-       squished for as long as the finger is down. The PRIMARY deform spans
-       70% of the timeline (gradual press — never snaps flat), then a soft
-       jelly landing (relax 80%, refill 90%, held 100%), fill forwards.
-       Never loops: the hold is the state, not a cycle.
+       ANIMATION: 33. Head Pat Release (0.55s one-shot)
+       Finger lifted: springs back from the held squish (0% = EXACTLY the
+       head-pat held pose) with a doughy overshoot tall (38%), settle
+       squish (68%), tiny counter-bounce (88%), neutral rest (100%).
+       Eyes pop open on the way up. fill forwards — never loops.
        ========================================================= */
 
     #body {
       transform-origin: 627px 985px;
-      animation: patSquish 0.6s cubic-bezier(0.42, 0, 0.2, 1) forwards;
+      animation: patSpring 0.55s cubic-bezier(0.34, 1.2, 0.64, 1) forwards;
     }
-    @keyframes patSquish {
-      0% { transform: scale(1, 1) translateY(0px); }
-      70% { transform: scale(1.07, 0.885) translateY(10px); }
-      80% { transform: scale(1.042, 0.905) translateY(8.6px); }
-      90% { transform: scale(1.068, 0.89) translateY(9.7px); }
-      100% { transform: scale(1.07, 0.885) translateY(10px); }
+    @keyframes patSpring {
+      0% { transform: scale(1.07, 0.885) translateY(10px); }
+      38% { transform: scale(0.965, 1.055) translateY(-8.5px); }
+      68% { transform: scale(1.018, 0.988) translateY(2.2px); }
+      88% { transform: scale(0.995, 1.008) translateY(-1px); }
+      100% { transform: scale(1, 1) translateY(0px); }
     }
 
     #sprout {
       transform-origin: 810px 375px;
-      animation: patSprout 0.6s cubic-bezier(0.42, 0, 0.2, 1) forwards;
+      animation: patSpringSprout 0.55s cubic-bezier(0.34, 1.2, 0.64, 1) forwards;
     }
-    @keyframes patSprout {
-      0% { transform: rotate(0deg) scale(1, 1); }
-      70% { transform: rotate(3deg) scale(1.12, 0.8) translateY(6px); }
-      80% { transform: rotate(2deg) scale(1.08, 0.84) translateY(5px); }
-      90% { transform: rotate(2.8deg) scale(1.11, 0.81) translateY(5.8px); }
-      100% { transform: rotate(3deg) scale(1.12, 0.8) translateY(6px); }
+    @keyframes patSpringSprout {
+      0% { transform: rotate(3deg) scale(1.12, 0.8) translateY(6px); }
+      38% { transform: rotate(-5deg) scale(0.95, 1.12) translateY(-7px); }
+      68% { transform: rotate(1.5deg) scale(1.03, 1) translateY(1px); }
+      88% { transform: rotate(-0.5deg) scale(0.99, 1.02) translateY(0px); }
+      100% { transform: rotate(0deg) scale(1, 1); }
     }
 
     #visor {
       transform-origin: 627px 615px;
-      animation: patVisor 0.6s cubic-bezier(0.42, 0, 0.2, 1) forwards;
+      animation: patSpringVisor 0.55s cubic-bezier(0.34, 1.2, 0.64, 1) forwards;
     }
-    @keyframes patVisor {
-      0% { transform: translateY(0px) scale(1, 1); }
-      70% { transform: translateY(13.5px) scale(1.04, 0.94); }
-      80% { transform: translateY(12px) scale(1.028, 0.952); }
-      90% { transform: translateY(13.2px) scale(1.038, 0.942); }
-      100% { transform: translateY(13.5px) scale(1.04, 0.94); }
+    @keyframes patSpringVisor {
+      0% { transform: translateY(13.5px) scale(1.04, 0.94); }
+      38% { transform: translateY(-7px) scale(0.985, 1.015); }
+      68% { transform: translateY(2px) scale(1.008, 0.995); }
+      88% { transform: translateY(-0.8px) scale(0.998, 1.003); }
+      100% { transform: translateY(0px) scale(1, 1); }
     }
 
     #face-group {
-      animation: patFace 0.6s cubic-bezier(0.42, 0, 0.2, 1) forwards;
+      animation: patSpringFace 0.55s cubic-bezier(0.34, 1.2, 0.64, 1) forwards;
     }
-    @keyframes patFace {
-      0% { transform: translateY(0px); }
-      70% { transform: translateY(12.5px); }
-      80% { transform: translateY(11.3px); }
-      90% { transform: translateY(12.3px); }
-      100% { transform: translateY(12.5px); }
+    @keyframes patSpringFace {
+      0% { transform: translateY(12.5px); }
+      38% { transform: translateY(-6.5px); }
+      68% { transform: translateY(2px); }
+      88% { transform: translateY(-0.8px); }
+      100% { transform: translateY(0px); }
     }
 
     .eye {
       transform-box: fill-box;
-      transform-origin: center 70%;
-      animation: patSquint 0.6s cubic-bezier(0.42, 0, 0.2, 1) forwards;
+      transform-origin: center 65%;
+      animation: patSpringEyes 0.55s ease-out forwards;
     }
-    @keyframes patSquint {
-      0% { transform: scaleY(1); }
-      70% { transform: scaleY(0.5); }
-      80% { transform: scaleY(0.58); }
-      90% { transform: scaleY(0.52); }
-      100% { transform: scaleY(0.5); }
+    @keyframes patSpringEyes {
+      0% { transform: scaleY(0.5); }
+      30% { transform: scaleY(1.08); }
+      45% { transform: scaleY(1); }
+      100% { transform: scaleY(1); }
     }
 
     #blush {
       transform-origin: 627px 700px;
-      animation: patBlush 0.6s cubic-bezier(0.42, 0, 0.2, 1) forwards;
+      animation: patSpringBlush 0.55s ease-out forwards;
     }
-    @keyframes patBlush {
-      0% { opacity: 0.85; transform: scale(1); }
-      70% { opacity: 1; transform: scale(1.06); }
-      80% { opacity: 0.97; transform: scale(1.045); }
-      90% { opacity: 1; transform: scale(1.058); }
-      100% { opacity: 1; transform: scale(1.06); }
+    @keyframes patSpringBlush {
+      0% { opacity: 1; transform: scale(1.06); }
+      60% { opacity: 0.9; transform: scale(1.01); }
+      100% { opacity: 0.85; transform: scale(1); }
     }
 
     /* Common Hover Perk-up */
@@ -249,10 +245,10 @@
 
         <!-- Face Group -->
         <g id="face-group">
-          <!-- Eyes: happy arcs (registry eyeType "smiling") — being patted feels good -->
+          <!-- Eyes: round, POP OPEN on the way up (they were squinted arcs in the held pat) -->
           <g id="eyes" fill="#FAF1E7">
-            <path id="left-eye" class="eye" d="M 444 638 C 444 650, 470 686, 505 686 C 540 686, 566 650, 566 638 C 566 626, 554 624, 544 634 C 534 646, 520 654, 505 654 C 490 654, 476 646, 466 634 C 456 624, 444 626, 444 638 Z"/>
-            <path id="right-eye" class="eye" d="M 810 638 C 810 650, 784 686, 749 686 C 714 686, 688 650, 688 638 C 688 626, 700 624, 710 634 C 720 646, 734 654, 749 654 C 764 654, 778 646, 788 634 C 798 624, 810 626, 810 638 Z"/>
+            <path id="left-eye" class="eye" d="M 457 655 C 446 655, 439 646, 439 634 C 439 598, 468 572, 505 572 C 542 572, 571 598, 571 634 C 571 646, 564 655, 553 655 C 543 655, 537 646, 536 635 C 533 618, 521 608, 505 608 C 489 608, 477 618, 474 635 C 473 646, 467 655, 457 655 Z"/>
+            <path id="right-eye" class="eye" d="M 797 655 C 808 655, 815 646, 815 634 C 815 598, 786 572, 749 572 C 712 572, 683 598, 683 634 C 683 646, 690 655, 701 655 C 711 655, 717 646, 718 635 C 721 618, 733 608, 749 608 C 765 608, 777 618, 780 635 C 781 646, 787 655, 797 655 Z"/>
           </g>
 
           <!-- Cheeks / Blush -->
@@ -301,10 +297,11 @@
       <a href="mochi-shy.html" class="mode-btn" title="Praised or teased: squishes into cheeks, radiant coral blush, eyes dart bashfully away.">28. Shy / Flustered</a>
       <a href="mochi-apologetic.html" class="mode-btn" title="Prompt cancelled/failed: humble downward gaze, soft ear droop: 'Sorry about that!'.">29. Apologetic</a>
       <a href="mochi-wink.html" class="mode-btn" title="One-shot fix delivered: confident playful wink with one eye and a sly little nod.">30. Wink / Clever</a>
-      <a href="mochi-head-pat.html" class="mode-btn active" title="Touch feedback: squishes down like real mochi dough with cozy tactile delight.">31. Head Pat</a>
+      <a href="mochi-head-pat.html" class="mode-btn" title="Touch feedback: squishes down like real mochi dough with cozy tactile delight.">31. Head Pat</a>
       <a href="mochi-speaking.html" class="mode-btn" title="Voice output mode: visor glows with subtle rhythmic audio modulation.">32. Speaking</a>
+      <a href="mochi-head-pat-release.html" class="mode-btn active" title="Finger lifted: springs back from the pat with a soft doughy bounce.">33. Head Pat Release</a>
     </div>
-    <div class="desc-bar">31. Head Pat: Touch feedback: squishes down like real mochi dough with cozy tactile delight.</div>
+    <div class="desc-bar">33. Head Pat Release: Finger lifted: springs back from the pat with a soft doughy bounce.</div>
   </div>
 </body>
 </html>

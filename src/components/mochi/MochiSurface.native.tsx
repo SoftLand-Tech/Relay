@@ -24,10 +24,13 @@ export const MochiSurface = forwardRef<MochiSurfaceHandle, MochiSurfaceProps>(
 
     const inject = (name: MochiStateName) => {
       lastInjectedRef.current = name
-      // __mochForce exists only when the dev flag is baked into the document;
-      // fall back to __mochSet so a stale dev ref can't no-op in release.
-      const fn = __DEV__ ? 'window.__mochForce' : 'window.__mochSet'
-      webRef.current?.injectJavaScript(`${fn}('${name}');true;`)
+      // Guarded dispatch, same contract as the web surface: if the dev-only
+      // __mochForce hook isn't in the document (flag mismatch, stale doc),
+      // fall through to __mochSet instead of silently eval-throwing inside
+      // the WebView — that silent throw was the device "pat never shows" bug.
+      webRef.current?.injectJavaScript(
+        `window.__mochForce ? window.__mochForce('${name}') : window.__mochSet('${name}');true;`,
+      )
     }
 
     useImperativeHandle(

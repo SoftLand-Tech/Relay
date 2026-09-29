@@ -212,7 +212,7 @@ export default function Chat() {
     // the timer is cancelled forever and following stops mid-stream.
     // Non-animated while streaming: an animated scroll re-fired every flush
     // fights itself and makes the stream look slower than it is.
-    const t = setTimeout(() => listRef.current?.scrollToEnd?.({ animated: !busy }), 16)
+    const t = setTimeout(() => scrollListToEnd(!busy), 16)
     return () => clearTimeout(t)
   }, [msgs.length, msgs[msgs.length - 1]?.text, msgs[msgs.length - 1]?.segments?.length, tls.length, stick, busy])
 
@@ -225,6 +225,22 @@ export default function Chat() {
   // content-size/layout changes, since a new message landing while scrolled
   // up fires no scroll event at all (that was the "button never shows" bug).
   const scrollMetrics = useRef({ y: 0, contentH: 0, viewH: 0 })
+  // Exact end-of-content scroll. FlatList's scrollToEnd undershoots by the
+  // contentContainer's bottom reserve (the mascot clearance): on web it
+  // estimates the target from cell metrics, which never see container
+  // padding — the list lands 162px short, the last line rests behind Moch,
+  // and the 120px at-bottom threshold flips off and kills stream-follow.
+  // contentSize from scroll events DOES include the padding, so target
+  // contentH - viewH directly; fall back to scrollToEnd before the first
+  // scroll event populates the metrics.
+  const scrollListToEnd = useCallback((animated: boolean) => {
+    const { contentH, viewH } = scrollMetrics.current
+    if (viewH > 0 && contentH > viewH) {
+      listRef.current?.scrollToOffset?.({ offset: contentH - viewH, animated })
+    } else {
+      listRef.current?.scrollToEnd?.({ animated })
+    }
+  }, [])
   // While a programmatic jump-to-bottom is in flight, content-size changes
   // are our own doing — evaluating "is the user at the bottom" mid-jump
   // would see the not-yet-scrolled offset and cancel the follow.
@@ -253,8 +269,8 @@ export default function Chat() {
     stickUntil.current = Date.now() + 800
     setStick(true)
     setShowScrollBtn(false)
-    listRef.current?.scrollToEnd?.({ animated: true })
-  }, [])
+    scrollListToEnd(true)
+  }, [scrollListToEnd])
 
   // ── Slash palette ──────────────────────────────────────────────────────
   const slashQuery = input.startsWith('/') ? input.split('\n')[0] : null
@@ -732,6 +748,11 @@ export default function Chat() {
             </Pressable>
           ) : null}
 
+          {/* The list gets its own positioned box so Moch can float over its
+              top-right corner without reserving layout height: the transcript
+              flows underneath him while scrolling, and the paddingTop reserve
+              below keeps the oldest messages clear of him at the top rest. */}
+          <View style={s.listWrap}>
           <FlatList
             ref={listRef}
             // Keyed by STORED id: a real chat swap mounts a clean list (no
@@ -743,7 +764,7 @@ export default function Chat() {
             keyExtractor={(m) => m.id}
             renderItem={renderMsg}
             extraData={extraData}
-            contentContainerStyle={{ paddingBottom: 16, flexGrow: msgs.length ? 0 : 1 }}
+            contentContainerStyle={{ paddingTop: 156, paddingBottom: 16, flexGrow: msgs.length ? 0 : 1 }}
             keyboardShouldPersistTaps="handled"
             keyboardDismissMode="interactive"
             onScroll={readScroll}
@@ -1052,7 +1073,6 @@ export default function Chat() {
 
           {/* ── Composer: rounded pill, like ChatGPT ── */}
           <View style={[s.composerWrap, { paddingBottom: Math.max(insets.bottom, 10) }]}>
-            <Mascot mochi={mochi} />
             {queued.length > 0 ? (
               <View style={s.queueStrip}>
                 <View style={s.queueHead}>
@@ -1289,6 +1309,12 @@ export default function Chat() {
               onClose={() => setOptionSheet(null)}
             />
           ) : null}
+            {/* Moch floats: NO layout height of his own; the box is the only
+                touch target (tap = wink, press-and-hold = pat). */}
+            <View style={s.mochFloat} pointerEvents="box-none">
+              <Mascot mochi={mochi} />
+            </View>
+          </View>
         </KeyboardAvoidingView>
       </ScreenShell>
     </SafeAreaView>
@@ -1385,6 +1411,12 @@ const s = StyleSheet.create({
   clarifyRow: { flexDirection: 'row', gap: 8, marginTop: 10, alignItems: 'center' },
   miniSend: { width: 44, height: 44, borderRadius: 22, backgroundColor: C.accent, alignItems: 'center', justifyContent: 'center' },
   composerWrap: { paddingHorizontal: 12, paddingTop: 6, backgroundColor: C.bg },
+  // Positioned box around the transcript that hosts the floating mascot.
+  listWrap: { flex: 1 },
+  // Top-right float for Moch: the absolutely positioned view shrinks to the
+  // 144px box (no opposite anchors), so the box is the only touch target and
+  // the scroll-to-bottom FAB keeps the bottom-right corner.
+  mochFloat: { position: 'absolute', top: 0, right: 12 },
   chipStrip: { maxHeight: 72, marginBottom: 6 },
   composer: {
     flexDirection: 'row',

@@ -4,12 +4,14 @@
  * Subscribes to the app-signal stores and folds them into ONE MochiStateName
  * per instant, per the precedence field:
  *
- *   T0 head-pat (HOLD: finger down wins over everything, instant in/out)
+ *   T0 head-pat (HOLD: after a 500ms finger-down delay the pat wins over
+ *      everything — instant in after the delay, instant out on release)
  *   T1 critical  [error (momentary 3.8s) > approval > waiting-user > offline]
  *   T2 connecting
  *   T3 momentary overlays, NEWEST-first [notification, task-received,
  *      celebration, success, apologetic, idea, greeting, thank-you, shy,
- *      excited, confused, wink, waking-up]
+ *      excited, confused, wink, head-pat-release (finger-up spring),
+ *      waking-up]
  *   T4 live activity [speaking > listening > terminal > reading > working >
  *      deep-thinking > thinking > typing > waiting]
  *   T5 idle ladder [getting-sleepy 2.5min > sleeping 5min > low-battery]
@@ -70,6 +72,8 @@ export const mochiCommitted = atom<MochiStateName>('mochi')
 
 const MIN_HOLD_MS = 900
 const TAP_MS = 300
+/** How long a finger must stay down before the hold becomes a pat. */
+const PAT_DELAY_MS = 500
 const DEEP_THINKING_MS = 10_000
 const IDEA_AFTER_THINKING_MS = 3_000
 const THANK_YOU_WINDOW_MS = 60_000
@@ -109,6 +113,7 @@ const loopsFor: Partial<Record<MochiStateName, number>> = {
   'mochi-wink': 1,
   'mochi-waking-up': 0.5,
   'mochi-error': 1,
+  'mochi-head-pat-release': 1,
 }
 
 const momentLoopSec = (state: MochiStateName) => MOCHI_STATES[state].loopSec
@@ -198,6 +203,13 @@ export function useMochiState({ recording, activityKey }: { recording: boolean; 
   const prevBannerRef = useRef<unknown>(undefined)
   const prevDetachedRef = useRef<boolean | null>(null)
   const lastThankShyAtRef = useRef(0)
+  const patTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // A pat is a HELD press, not a touch: the first PAT_DELAY_MS of a hold
+  // keep the current state (idle keeps breathing); only then does T0 take
+  // over. Release before the threshold = never patted.
+  useEffect(() => () => {
+    if (patTimerRef.current) clearTimeout(patTimerRef.current)
+  }, [])
   const ideaRef = useRef({ turnKey: '', thinkingSince: 0, fired: false })
 
   const pushMoment = useCallback((name: MochiStateName) => {
@@ -465,16 +477,32 @@ export function useMochiState({ recording, activityKey }: { recording: boolean; 
   // ── press (T0) ────────────────────────────────────────────────────────────
   const onPressIn = useCallback(() => {
     pressStartRef.current = Date.now()
-    pattingRef.current = true
     noteActivity()
+    // Nothing happens yet: the current state keeps playing (idle breathes)
+    // through the delay — a CSS-side delay would freeze it mid-breath.
+    patTimerRef.current = setTimeout(() => {
+      patTimerRef.current = null
+      pattingRef.current = true
+      evaluate()
+    }, PAT_DELAY_MS)
     evaluate()
   }, [noteActivity, evaluate])
 
   const onPressOut = useCallback(() => {
     const held = Date.now() - pressStartRef.current
+    const wasPatting = pattingRef.current
+    if (patTimerRef.current) {
+      clearTimeout(patTimerRef.current)
+      patTimerRef.current = null
+    }
     pattingRef.current = false
     noteActivity()
-    if (held < TAP_MS) pushMoment('mochi-wink')
+    // A real pat ends with the dough SPRINGING back, not a hard cut: the
+    // release state is a 0.55s one-shot whose 0% frame is exactly the held
+    // squish pose (T3 moment; entry bypasses the dwell because we're exiting
+    // head-pat, and it expires straight into the next waterfall state).
+    if (wasPatting) pushMoment('mochi-head-pat-release')
+    else if (held < TAP_MS) pushMoment('mochi-wink')
     evaluate()
   }, [noteActivity, evaluate, pushMoment])
 
