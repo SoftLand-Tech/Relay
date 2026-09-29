@@ -45,8 +45,6 @@ export function ScreenShell({
   const S = useShape()
   const s = useStyles(makeS)
   const [open, setOpen] = useState(false)
-  // Width of the tray's right control group — insets the centered title.
-  const [rightW, setRightW] = useState(0)
   const router = useRouter()
   const insets = useSafeAreaInsets()
   const online = useStore(isConnectedAtom)
@@ -227,7 +225,7 @@ export function ScreenShell({
         <View style={[s.topBarTray, { paddingTop: insets.top + 8 }]}>
           <View
             pointerEvents="none"
-            style={[s.trayTitleAbs, { top: insets.top + 8, bottom: 8, paddingLeft: 44, paddingRight: 44 + rightW }]}
+            style={[s.trayTitleAbs, { top: insets.top + 8, bottom: 8, paddingHorizontal: 44 }]}
           >
             <View style={s.trayTitleWrap}>
               {showBrand ? <Text style={s.trayBrand}>Moch</Text> : null}
@@ -246,7 +244,7 @@ export function ScreenShell({
               <Icon name="menu" size={20} color={C.text} />
             </Pressable>
             <View style={s.traySpacer} />
-            <View style={s.trayRight} onLayout={(e) => setRightW(e.nativeEvent.layout.width)}>
+            <View style={s.trayRight}>
               {right}
               <Pressable
                 style={s.trayCircle}

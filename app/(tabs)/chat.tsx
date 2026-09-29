@@ -727,7 +727,7 @@ export default function Chat() {
         title={title || 'Moch'}
         onSearch={() => router.navigate('/(tabs)/sessions')}
         right={
-          curModel ? (
+          !S.trayHeader && curModel ? (
             <Pressable
               style={({ pressed }) => [s.modelChip, pressed && s.btnPressed]}
               onPress={() => setModelPickerOpen(true)}
@@ -776,6 +776,21 @@ export default function Chat() {
               flows underneath him while scrolling, and the paddingTop reserve
               below keeps the oldest messages clear of him at the top rest. */}
           <View style={s.listWrap}>
+          {S.trayHeader && curModel ? (
+            // Tray keeps a single symmetric row (menu | centered title |
+            // status), so the model chip floats here — mirrored from Moch,
+            // who owns the right corner. Messages scroll under it like they
+            // do under him; the list's top reserve keeps both clear at rest.
+            <Pressable
+              style={({ pressed }) => [s.modelChip, s.modelFloatChip, pressed && s.btnPressed]}
+              onPress={() => setModelPickerOpen(true)}
+              hitSlop={6}
+              accessibilityLabel={`Current model ${curModel}. Tap to change`}
+            >
+              <Icon name="cube-outline" size={12} color={C.accent} />
+              <Text style={s.modelChipText} numberOfLines={1}>{curModel}</Text>
+            </Pressable>
+          ) : null}
           <FlatList
             ref={listRef}
             // Keyed by STORED id: a real chat swap mounts a clean list (no
@@ -1437,6 +1452,7 @@ const makeS = () => StyleSheet.create({
     borderColor: S.modelChipTint ? C.accentSoft : C.border,
   },
   modelChipText: { color: C.textDim, fontSize: 11.5, fontWeight: '700', flexShrink: 1 },
+  modelFloatChip: { position: 'absolute', top: 8, left: 12, zIndex: 2 },
   slashHead: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 16, paddingVertical: 7, borderBottomWidth: 1, borderBottomColor: C.borderSoft },
   slashHeadText: { color: C.accent, fontSize: 11, fontWeight: '800', letterSpacing: 0.5, flex: 1 },
   slashHint: { color: C.textFaint, fontSize: 10.5 },
