@@ -8,11 +8,12 @@ import type { MochiStateName } from './mochi/mochiStates.gen'
 const BOX = 144
 
 /**
- * The chat mascot: tap for a wink; press-and-hold (past a 500ms threshold
- * owned by useMochiState) for a pat that stays squished until release, then
- * springs back through the one-shot head-pat-release state — no long-press
- * gesture competes with it. The wrapper is pointerEvents 'box-none' so ONLY
- * the 144px square is touchable — the composer, queue strip and list scroll
+ * The chat mascot: a tap is a complete no-op (Mochi keeps whatever
+ * animation he is running); press-and-hold past a 500ms threshold (owned by
+ * useMochiState) for a pat that stays squished until release, then springs
+ * back through the one-shot head-pat-release state — no long-press gesture
+ * competes with it. The wrapper is pointerEvents 'box-none' so ONLY the
+ * 144px square is touchable — the composer, queue strip and list scroll
  * are never intercepted.
  *
  * NO haptics anywhere in the mascot: user rejected every variant (hold pulse
@@ -67,13 +68,14 @@ export function Mascot({ mochi }: { mochi: UseMochiState }) {
 
 /**
  * The bare mascot for surfaces with no waterfall and no touch target (the
- * connection overlay). Mounts fresh with its surface — inside the 94%-black
- * veil the status text appears first and Mochi fades in a beat later
- * (cold WebView start ~200-500ms on low-end devices; accepted).
+ * connection overlay, splash, onboarding). Mounts fresh with its surface —
+ * inside the 94%-black veil the status text appears first and Mochi fades
+ * in a beat later (cold WebView start ~200-500ms on low-end devices;
+ * accepted).
  */
-export function MochiStage({ state, marginBottom = 12 }: { state: MochiStateName; marginBottom?: number }) {
+export function MochiStage({ state, marginBottom = 12, size = BOX }: { state: MochiStateName; marginBottom?: number; size?: number }) {
   return (
-    <View style={[s.stage, { marginBottom }]} pointerEvents="none" aria-hidden={true}>
+    <View style={[s.stage, { marginBottom, width: size, height: size }]} pointerEvents="none" aria-hidden={true}>
       <MochiSurface state={state} />
     </View>
   )

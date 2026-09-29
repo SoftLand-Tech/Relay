@@ -5,7 +5,9 @@
  * per instant, per the precedence field:
  *
  *   T0 head-pat (HOLD: after a 500ms finger-down delay the pat wins over
- *      everything — instant in after the delay, instant out on release)
+ *      everything — instant in after the delay, instant out on release.
+ *      A tap shorter than the delay is a complete no-op: no wink, no
+ *      switch — the current state keeps playing untouched)
  *   T1 critical  [error (momentary 3.8s) > approval > waiting-user > offline]
  *   T2 connecting
  *   T3 momentary overlays, NEWEST-first [notification, task-received,
@@ -71,7 +73,6 @@ import { ttsPlaying, voiceBusy } from '../../lib/voice'
 export const mochiCommitted = atom<MochiStateName>('mochi')
 
 const MIN_HOLD_MS = 900
-const TAP_MS = 300
 /** How long a finger must stay down before the hold becomes a pat. */
 const PAT_DELAY_MS = 500
 const DEEP_THINKING_MS = 10_000
@@ -193,7 +194,6 @@ export function useMochiState({ recording, activityKey }: { recording: boolean; 
   const lastCommitAtRef = useRef(0)
   const parkedRef = useRef<MochiStateName | null>(null)
   const pattingRef = useRef(false)
-  const pressStartRef = useRef(0)
   const lastActivityRef = useRef(Date.now())
   const momentsRef = useRef<Moment[]>([])
   const busyStartRef = useRef(0)
@@ -475,34 +475,34 @@ export function useMochiState({ recording, activityKey }: { recording: boolean; 
   }, [...snapshot])
 
   // ── press (T0) ────────────────────────────────────────────────────────────
+  // A tap does NOTHING: no wink, no state switch, not even an idle-clock
+  // reset — Mochi keeps whatever animation he is running (working, sleeping,
+  // …). Only a hold past PAT_DELAY_MS becomes a pat, and only a real pat
+  // counts as interaction (wakes sleepers, ends with the release spring).
   const onPressIn = useCallback(() => {
-    pressStartRef.current = Date.now()
-    noteActivity()
-    // Nothing happens yet: the current state keeps playing (idle breathes)
-    // through the delay — a CSS-side delay would freeze it mid-breath.
     patTimerRef.current = setTimeout(() => {
       patTimerRef.current = null
       pattingRef.current = true
+      noteActivity()
       evaluate()
     }, PAT_DELAY_MS)
-    evaluate()
   }, [noteActivity, evaluate])
 
   const onPressOut = useCallback(() => {
-    const held = Date.now() - pressStartRef.current
     const wasPatting = pattingRef.current
     if (patTimerRef.current) {
       clearTimeout(patTimerRef.current)
       patTimerRef.current = null
     }
     pattingRef.current = false
-    noteActivity()
-    // A real pat ends with the dough SPRINGING back, not a hard cut: the
-    // release state is a 0.55s one-shot whose 0% frame is exactly the held
-    // squish pose (T3 moment; entry bypasses the dwell because we're exiting
-    // head-pat, and it expires straight into the next waterfall state).
-    if (wasPatting) pushMoment('mochi-head-pat-release')
-    else if (held < TAP_MS) pushMoment('mochi-wink')
+    if (wasPatting) {
+      noteActivity()
+      // The pat ends with the dough SPRINGING back, not a hard cut: the
+      // release state is a 0.55s one-shot whose 0% frame is exactly the held
+      // squish pose (T3 moment; entry bypasses the dwell because we're exiting
+      // head-pat, and it expires straight into the next waterfall state).
+      pushMoment('mochi-head-pat-release')
+    }
     evaluate()
   }, [noteActivity, evaluate, pushMoment])
 
