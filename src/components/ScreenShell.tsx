@@ -5,7 +5,7 @@ import { useRouter } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useStore } from '@nanostores/react'
 import { Sidebar, type NavItem, type RecentChat } from './Sidebar'
-import { C } from '../lib/theme'
+import { C, S, useStyles, useShape } from '../lib/theme'
 import { attentionById, rowStatus } from '../lib/attention'
 import { isConnected as isConnectedAtom, rpc } from '../lib/gateway'
 import {
@@ -41,6 +41,8 @@ export function ScreenShell({
   showBrand?: boolean
   onSearch?: () => void
 }) {
+  const S = useShape()
+  const s = useStyles(makeS)
   const [open, setOpen] = useState(false)
   const router = useRouter()
   const insets = useSafeAreaInsets()
@@ -214,7 +216,7 @@ export function ScreenShell({
 
   return (
     <View style={s.root}>
-      <View style={[s.topBar, { paddingTop: insets.top + 6 }]}>
+      <View style={[s.topBar, { paddingTop: insets.top + (S.trayHeader ? 8 : 6) }]}>
         <Pressable
           style={({ pressed }) => [s.circle, pressed && s.circlePressed]}
           onPress={() => setOpen(true)}
@@ -291,22 +293,38 @@ export function ScreenShell({
   )
 }
 
-const s = StyleSheet.create({
+const makeS = () => StyleSheet.create({
   root: { flex: 1, backgroundColor: C.bg },
+  // Mocheme: the top bar floats as a rounded tray card; Relay keeps the bare
+  // bar that today's app renders.
   topBar: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
     paddingHorizontal: 10,
-    paddingBottom: 8,
+    paddingBottom: S.trayHeader ? 0 : 8,
+    marginHorizontal: S.trayHeader ? 10 : 0,
+    marginTop: S.trayHeader ? 8 : 0,
+    paddingVertical: S.trayHeader ? 8 : 0,
+    backgroundColor: S.trayHeader ? C.bgCard : 'transparent',
+    borderWidth: S.trayHeader ? 1 : 0,
+    borderColor: C.border,
+    borderRadius: S.trayHeader ? 24 : 0,
+    shadowColor: '#000',
+    shadowOpacity: S.trayHeader ? 0.35 : 0,
+    shadowRadius: 20,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: S.trayHeader ? 8 : 0,
   },
   circle: {
     width: 38,
     height: 38,
-    borderRadius: 19,
+    borderRadius: S.trayHeader ? 14 : 19,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: C.bgCard,
+    backgroundColor: S.trayHeader ? C.bgElev : C.bgCard,
+    borderWidth: S.trayHeader ? 1 : 0,
+    borderColor: C.borderSoft,
   },
   circlePressed: { opacity: 0.55 },
   titleWrap: { flex: 1, paddingHorizontal: 4 },

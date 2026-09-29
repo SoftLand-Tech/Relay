@@ -7,7 +7,7 @@ import * as Clipboard from 'expo-clipboard'
 import { rpc, isConnected as isConnectedAtom } from '../../src/lib/gateway'
 import { ensureSession } from '../../src/lib/chat'
 import { ScreenShell } from '../../src/components/ScreenShell'
-import { C } from '../../src/lib/theme'
+import { C, useStyles } from '../../src/lib/theme'
 
 interface Job {
   job_id: string
@@ -44,6 +44,7 @@ function when(iso?: string | null): string {
 }
 
 function fmtFull(iso?: string | null): string {
+  const s = useStyles(makeS)
   if (!iso) return '—'
   const t = Date.parse(iso)
   if (Number.isNaN(t)) return '—'
@@ -60,6 +61,7 @@ function fmtFull(iso?: string | null): string {
  * and `slash.exec /cron` for run-now and edit (edit flags are shell-quoted).
  */
 export default function Automations() {
+  const s = useStyles(makeS)
   const online = useStore(isConnectedAtom)
   const [jobs, setJobs] = useState<Job[]>([])
   const [loading, setLoading] = useState(true)
@@ -388,6 +390,7 @@ export default function Automations() {
 }
 
 function Detail({ label, value, onCopy, danger }: { label: string; value: string; onCopy?: () => void; danger?: boolean }) {
+  const s = useStyles(makeS)
   return (
     <View style={s.detailRow}>
       <Text style={s.detailLabel}>{label}</Text>
@@ -402,6 +405,7 @@ function Detail({ label, value, onCopy, danger }: { label: string; value: string
 }
 
 function Action({ icon, label, onPress, danger }: { icon: keyof typeof Ionicons.glyphMap; label: string; onPress: () => void; danger?: boolean }) {
+  const s = useStyles(makeS)
   return (
     <Pressable
       style={({ pressed }) => [s.actionBtn, pressed && s.actionPressed]}
@@ -415,7 +419,7 @@ function Action({ icon, label, onPress, danger }: { icon: keyof typeof Ionicons.
   )
 }
 
-const s = StyleSheet.create({
+const makeS = () => StyleSheet.create({
   safe: { flex: 1, backgroundColor: C.bg },
   intro: { color: C.textDim, fontSize: 13, lineHeight: 19, marginBottom: 4 },
   statusRow: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: 'rgba(74,222,128,0.08)', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8 },

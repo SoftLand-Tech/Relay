@@ -10,7 +10,7 @@ import { Modal, View, Text, Pressable, TextInput, ScrollView, StyleSheet, Keyboa
 import { Ionicons } from '@expo/vector-icons'
 import * as Haptics from 'expo-haptics'
 import { cachedCommandChoices, rememberCommandChoices } from '../lib/slash'
-import { C } from '../lib/theme'
+import { C, useStyles } from '../lib/theme'
 
 export interface OptionChoice {
   value: string
@@ -41,6 +41,7 @@ export function CommandOptionsSheet({
   onRun: (commandLine: string) => void
   onClose: () => void
 }) {
+  const s = useStyles(makeS)
   const [query, setQuery] = useState('')
   const [custom, setCustom] = useState('')
   // Repeat opens of the same command render the cached choices instantly —
@@ -171,7 +172,7 @@ export function CommandOptionsSheet({
   )
 }
 
-const s = StyleSheet.create({
+const makeS = () => StyleSheet.create({
   flex: { flex: 1, justifyContent: 'flex-end' },
   scrim: { backgroundColor: C.scrim },
   sheet: {

@@ -5,6 +5,7 @@ import { computed } from 'nanostores'
 import { useStore } from '@nanostores/react'
 import { Ionicons } from '@expo/vector-icons'
 import * as Clipboard from 'expo-clipboard'
+import * as Haptics from 'expo-haptics'
 import { router } from 'expo-router'
 import { connConfig, connectionState, gatewayError, disconnect, retryNow, redactedUrl,
   servers as serversStore, activeServerId, switchToServer, removeServer, forgetActiveServer,
@@ -14,10 +15,11 @@ import { diagLog, logText } from '../../src/lib/log'
 import {
   notificationsEnabled, setNotificationsEnabled, ensureNotificationPermission,
 } from '../../src/lib/push'
-import { C } from '../../src/lib/theme'
+import { C, useStyles, setTheme, THEME_OPTIONS, themeId, type ThemeId } from '../../src/lib/theme'
 import { ScreenShell } from '../../src/components/ScreenShell'
 
 export default function Settings() {
+  const s = useStyles(makeS)
   return (
     <SafeAreaView style={s.frame} edges={['bottom']}>
       <SettingsInner />
@@ -28,6 +30,7 @@ export default function Settings() {
 // ── Small building blocks ───────────────────────────────────────────────────
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  const s = useStyles(makeS)
   return (
     <View style={s.section}>
       <Text style={s.sectionLabel}>{title}</Text>
@@ -48,6 +51,7 @@ function Row({
   disabled?: boolean
   chevron?: boolean
 }) {
+  const s = useStyles(makeS)
   const body = (
     <View style={[s.rowInner, !onPress && { minHeight: 52 }]}>
       <View style={[s.rowIcon, danger && s.rowIconDanger]}>
@@ -77,12 +81,49 @@ function Row({
 }
 
 function Divider() {
+  const s = useStyles(makeS)
   return <View style={s.divider} />
+}
+
+
+// ── Appearance: theme option card (Mocheme / Relay) ─────────────────────────
+
+function ThemeCard({ id, name, desc, swatches, onPick }: {
+  id: ThemeId
+  name: string
+  desc: string
+  swatches: string[]
+  onPick: (id: ThemeId) => void
+}) {
+  const s = useStyles(makeS)
+  const active = useStore(themeId) === id
+  return (
+    <Pressable
+      style={({ pressed }) => [s.themeCard, active && s.themeCardOn, pressed && s.rowPressed]}
+      onPress={() => onPick(id)}
+      accessibilityRole="button"
+      accessibilityLabel={`${name} theme${active ? ', active' : ''}`}
+    >
+      {active ? (
+        <View style={s.themeCheck}>
+          <Ionicons name="checkmark" size={13} color={C.onAccent} />
+        </View>
+      ) : null}
+      <Text style={s.themeName}>{name}</Text>
+      <Text style={s.themeDesc} numberOfLines={2}>{desc}</Text>
+      <View style={s.themeSwatches}>
+        {swatches.map((c, i) => (
+          <View key={i} style={[s.themeSw, { backgroundColor: c }]} />
+        ))}
+      </View>
+    </Pressable>
+  )
 }
 
 // ── Screen ──────────────────────────────────────────────────────────────────
 
 function SettingsInner() {
+  const s = useStyles(makeS)
   const cfg = useStore(connConfig)
   const state = useStore(connectionState)
   const err = useStore(gatewayError)
@@ -170,6 +211,14 @@ function SettingsInner() {
             {err ? <Text style={s.heroErr} numberOfLines={2}>{err}</Text> : null}
           </View>
         </View>
+
+        <Section title="APPEARANCE">
+          <View style={s.themeRow}>
+            {THEME_OPTIONS.map((t) => (
+              <ThemeCard key={t.id} id={t.id} name={t.name} desc={t.desc} swatches={t.swatches} onPick={(id) => { void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); void setTheme(id) }} />
+            ))}
+          </View>
+        </Section>
 
         <Section title="COMPUTERS">
           {savedServers.length === 0 ? (
@@ -302,7 +351,7 @@ function SettingsInner() {
   )
 }
 
-const s = StyleSheet.create({
+const makeS = () => StyleSheet.create({
   frame: { flex: 1, backgroundColor: C.bg },
   root: { flex: 1, backgroundColor: C.bg },
   hero: {
@@ -321,6 +370,31 @@ const s = StyleSheet.create({
   heroErr: { color: C.red, fontSize: 11.5, marginTop: 4, lineHeight: 15 },
   section: { gap: 8 },
   sectionLabel: { color: C.textFaint, fontSize: 10.5, fontWeight: '800', letterSpacing: 1.5, marginLeft: 4 },
+  themeRow: { flexDirection: 'row', gap: 10, padding: 10 },
+  themeCard: {
+    flex: 1,
+    backgroundColor: C.bgElev,
+    borderWidth: 1.5,
+    borderColor: C.border,
+    borderRadius: 20,
+    padding: 12,
+  },
+  themeCardOn: { borderColor: C.accent, backgroundColor: C.accentSoft },
+  themeCheck: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: C.accent,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  themeName: { color: C.text, fontSize: 14, fontWeight: '700', marginBottom: 2 },
+  themeDesc: { color: C.textFaint, fontSize: 11, lineHeight: 15, marginBottom: 10, minHeight: 30 },
+  themeSwatches: { flexDirection: 'row', gap: 5 },
+  themeSw: { width: 22, height: 22, borderRadius: 11, borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)' },
   card: { backgroundColor: C.bgCard, borderRadius: 16, borderWidth: 1, borderColor: C.borderSoft, overflow: 'hidden' },
   row: { minHeight: 56 },
   rowPressed: { backgroundColor: C.bgHover },

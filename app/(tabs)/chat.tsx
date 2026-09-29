@@ -73,7 +73,7 @@ import { MessageBubble, ToolRow } from '../../src/components/Chat'
 import { Mascot } from '../../src/components/Mascot'
 import { useMochiState } from '../../src/components/mochi/useMochiState'
 import { ScreenShell } from '../../src/components/ScreenShell'
-import { C } from '../../src/lib/theme'
+import { C, S, useStyles, useShape } from '../../src/lib/theme'
 
 /** Empty-state prompts, styled as plain icon rows the way ChatGPT does. */
 const STARTERS = [
@@ -90,6 +90,8 @@ const MAX_SLASH_ITEMS = 120
 const REC_OPTIONS: RecordingOptions = { ...RecordingPresets.HIGH_QUALITY, isMeteringEnabled: true }
 
 export default function Chat() {
+  const S = useShape()
+  const s = useStyles(makeS)
   const msgs = useStore(messages)
   const tls = useStore(tools)
   const busy = useStore(agentBusy)
@@ -1256,7 +1258,7 @@ export default function Chat() {
                           ? 'Steer the running task…'
                           : busy
                             ? 'Reply — queued until it finishes'
-                            : 'Ask Hermes'
+                            : S.askPlaceholder
                   }
                   placeholderTextColor={C.textFaint}
                   multiline={Platform.OS !== 'web'}
@@ -1370,7 +1372,7 @@ export default function Chat() {
   )
 }
 
-const s = StyleSheet.create({
+const makeS = () => StyleSheet.create({
   safe: { flex: 1, backgroundColor: C.bg },
   root: { flex: 1, backgroundColor: C.bg },
   // Shared press feedback so every tappable answers on the frame it's hit.
@@ -1395,9 +1397,9 @@ const s = StyleSheet.create({
     marginHorizontal: 16,
     marginVertical: 5,
     maxWidth: '92%',
-    paddingHorizontal: 10,
-    height: 26,
-    borderRadius: 13,
+    paddingHorizontal: S.radiusChip > 100 ? 14 : 10,
+    height: S.radiusChip > 100 ? 30 : 26,
+    borderRadius: S.radiusChip,
     backgroundColor: C.bgCard,
     borderWidth: 1,
     borderColor: C.border,
@@ -1429,9 +1431,9 @@ const s = StyleSheet.create({
     height: 30,
     paddingHorizontal: 10,
     borderRadius: 15,
-    backgroundColor: C.bgCard,
+    backgroundColor: S.modelChipTint ? C.accentSoft : C.bgCard,
     borderWidth: 1,
-    borderColor: C.border,
+    borderColor: S.modelChipTint ? C.accentSoft : C.border,
   },
   modelChipText: { color: C.textDim, fontSize: 11.5, fontWeight: '700', flexShrink: 1 },
   slashHead: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 16, paddingVertical: 7, borderBottomWidth: 1, borderBottomColor: C.borderSoft },
@@ -1472,18 +1474,49 @@ const s = StyleSheet.create({
     alignItems: 'flex-end',
     gap: 6,
     backgroundColor: C.bgElev,
-    borderRadius: 26,
-    borderWidth: 1,
+    borderRadius: S.radiusComposer,
+    borderWidth: S.composerBorder,
     borderColor: C.border,
     paddingHorizontal: 8,
-    paddingVertical: 6,
+    paddingVertical: S.composerBorder > 1 ? 7 : 6,
+    shadowColor: '#000',
+    shadowOpacity: S.radiusComposer > 26 ? 0.4 : 0,
+    shadowRadius: 20,
+    shadowOffset: { width: 0, height: 5 },
+    elevation: S.radiusComposer > 26 ? 8 : 0,
   },
-  attach: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
+  attach: {
+    width: S.sendSize,
+    height: S.sendSize,
+    borderRadius: S.sendSize / 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: C.btnTint,
+  },
   attachOff: { opacity: 0.4 },
   input: { flex: 1, color: C.text, fontSize: 16, maxHeight: 110, minHeight: 34, paddingTop: 7, paddingBottom: 7, paddingHorizontal: 4 },
-  iconCircle: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
+  iconCircle: {
+    width: S.sendSize,
+    height: S.sendSize,
+    borderRadius: S.sendSize / 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: C.btnTint,
+  },
   recOn: { backgroundColor: C.red },
-  sendBtn: { width: 34, height: 34, borderRadius: 17, backgroundColor: C.accent, alignItems: 'center', justifyContent: 'center' },
+  sendBtn: {
+    width: S.sendSize,
+    height: S.sendSize,
+    borderRadius: S.sendSize / 2,
+    backgroundColor: C.accent,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOpacity: S.radiusComposer > 26 ? 0.35 : 0,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: S.radiusComposer > 26 ? 5 : 0,
+  },
   sendOff: { backgroundColor: C.bgCard },
   steerChip: {
     flexDirection: 'row',
@@ -1491,9 +1524,9 @@ const s = StyleSheet.create({
     gap: 4,
     alignSelf: 'center',
     marginTop: 6,
-    paddingHorizontal: 10,
-    height: 26,
-    borderRadius: 13,
+    paddingHorizontal: S.radiusChip > 100 ? 14 : 10,
+    height: S.radiusChip > 100 ? 28 : 26,
+    borderRadius: S.radiusChip,
     backgroundColor: C.bgCard,
   },
   steerChipOn: { backgroundColor: C.accent },

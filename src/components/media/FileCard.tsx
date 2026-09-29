@@ -3,7 +3,7 @@ import { Linking, Pressable, StyleSheet, Text, View } from 'react-native'
 import * as Sharing from 'expo-sharing'
 import { Ionicons } from '@expo/vector-icons'
 import { useStore } from '@nanostores/react'
-import { C } from '../../lib/theme'
+import { C, useStyles } from '../../lib/theme'
 import type { ChatSegment } from '../../lib/chat'
 import { cacheKeyFor, fileIconForPath, formatBytes } from '../../lib/media'
 import { downloadMediaFile } from '../../lib/mediaCache'
@@ -19,6 +19,7 @@ import { mediaStateForKey } from '../../lib/mediaState'
  * render a retry row wired to the same download.
  */
 export function FileCard({ seg }: { seg: ChatSegment }) {
+  const s = useStyles(makeS)
   const load = useStore(mediaStateForKey(seg.path ? cacheKeyFor(seg.path) : '_idle_'))
   const [localUri, setLocalUri] = useState<string | null>(seg.localUri ?? null)
   const [sharing, setSharing] = useState(false)
@@ -105,7 +106,7 @@ export function FileCard({ seg }: { seg: ChatSegment }) {
   )
 }
 
-const s = StyleSheet.create({
+const makeS = () => StyleSheet.create({
   card: {
     backgroundColor: C.bgElev,
     borderRadius: 16,

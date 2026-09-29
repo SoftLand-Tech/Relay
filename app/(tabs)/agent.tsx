@@ -7,13 +7,14 @@ import { rpc, isConnected as isConnectedAtom, retryNow } from '../../src/lib/gat
 import { activeSession, ensureSession } from '../../src/lib/chat'
 import { liveModel, liveProvider, fetchModelOptions, liveReasoningDisplay } from '../../src/lib/modelState'
 import { log } from '../../src/lib/log'
-import { C } from '../../src/lib/theme'
+import { C, useStyles } from '../../src/lib/theme'
 import { ScreenShell } from '../../src/components/ScreenShell'
 import { ModelPickerSheet } from '../../src/components/ModelPickerSheet'
 
 const EFFORTS = ['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max']
 
 export default function Controls() {
+  const s = useStyles(makeS)
   const online = useStore(isConnectedAtom)
   const sid = useStore(activeSession)
   const model = useStore(liveModel)
@@ -169,7 +170,7 @@ export default function Controls() {
   )
 }
 
-const s = StyleSheet.create({
+const makeS = () => StyleSheet.create({
   frame: { flex: 1, backgroundColor: C.bg },
   root: { flex: 1, backgroundColor: C.bg },
   pressed: { opacity: 0.6 },

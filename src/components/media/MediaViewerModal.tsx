@@ -3,7 +3,7 @@ import { Modal, Pressable, ScrollView, StyleSheet, Text, View, Dimensions, type 
 import { Image } from 'expo-image'
 import * as Sharing from 'expo-sharing'
 import { Ionicons } from '@expo/vector-icons'
-import { C } from '../../lib/theme'
+import { C, useStyles } from '../../lib/theme'
 import type { ChatSegment } from '../../lib/chat'
 import { imageSource } from '../../lib/mediaCache'
 import { isDataUrlPath } from '../../lib/media'
@@ -24,6 +24,7 @@ export function MediaViewerModal({
   visible: boolean
   onClose: () => void
 }) {
+  const s = useStyles(makeS)
   const [sharing, setSharing] = useState(false)
   // A % height inside a ScrollView contentContainer measures as 0 on Android
   // (the container's size depends on its content), which laid the image out
@@ -112,7 +113,7 @@ export function MediaViewerModal({
   )
 }
 
-const s = StyleSheet.create({
+const makeS = () => StyleSheet.create({
   scrim: { flex: 1, backgroundColor: C.bg },
   header: {
     flexDirection: 'row',

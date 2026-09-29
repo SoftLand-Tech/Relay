@@ -1,6 +1,7 @@
 import React from 'react'
 import { Tabs } from 'expo-router'
-import { C } from '../../src/lib/theme'
+import { useStore } from '@nanostores/react'
+import { C, themeVersion } from '../../src/lib/theme'
 
 /**
  * The tab bar is hidden: navigation moved into the ChatGPT-style drawer, so
@@ -8,6 +9,9 @@ import { C } from '../../src/lib/theme'
  * kept because the drawer routes to these screens.
  */
 export default function TabsLayout() {
+  // Subscribe so a theme switch re-reads C.bg for the scene backgrounds —
+  // nothing else re-renders this layout when the tokens mutate.
+  useStore(themeVersion)
   return (
     <Tabs
       screenOptions={{

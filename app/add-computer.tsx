@@ -4,13 +4,14 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { router } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 import { PairForm } from '../src/components/PairForm'
-import { C } from '../src/lib/theme'
+import { C, useStyles } from '../src/lib/theme'
 
 /**
  * Pair an additional computer without forgetting the current one.
  * The new machine connects immediately; the old one stays in the saved list.
  */
 export default function AddComputer() {
+  const s = useStyles(makeS)
   return (
     <SafeAreaView style={s.safe} edges={['top', 'bottom']}>
       <ScrollView style={s.root} contentContainerStyle={s.content} keyboardShouldPersistTaps="handled">
@@ -32,7 +33,7 @@ export default function AddComputer() {
   )
 }
 
-const s = StyleSheet.create({
+const makeS = () => StyleSheet.create({
   safe: { flex: 1, backgroundColor: C.bg },
   root: { flex: 1, backgroundColor: C.bg },
   pressed: { opacity: 0.6 },

@@ -21,13 +21,14 @@ import { loadDrafts } from '../src/lib/drafts'
 import { loadSendQueue } from '../src/lib/sendQueue'
 import { parseConnectUrl } from '../src/lib/pairing'
 import { pruneRelayMedia } from '../src/lib/mediaCache'
-import { C } from '../src/lib/theme'
+import { C, loadTheme, useStyles } from '../src/lib/theme'
 
 // Keep the native splash up until the animated overlay is committed on top
 // of the app — global scope, un-awaited, per the SDK 57 docs.
 SplashScreen.preventAutoHideAsync().catch(() => {})
 
 export default function RootLayout() {
+  const s = useStyles(makeS)
   const state = useStore(connectionState)
   const cfg = useStore(connConfig)
   const err = useStore(gatewayError)
@@ -61,6 +62,7 @@ export default function RootLayout() {
       SplashScreen.hide()
     } catch {}
     hookChatEvents()
+    void loadTheme()
     void loadOutbox()
     void loadDrafts()
     void loadSendQueue()
@@ -248,7 +250,7 @@ export default function RootLayout() {
   )
 }
 
-const s = StyleSheet.create({
+const makeS = () => StyleSheet.create({
   overlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.94)', alignItems: 'center', justifyContent: 'center', padding: 30 },
   pressed: { opacity: 0.6 },
   errTitle: { color: C.red, fontSize: 19, fontWeight: '800', marginBottom: 12 },

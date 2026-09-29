@@ -19,11 +19,12 @@ import {
 import { ensureSession, activeLiveId, pushLocalMessage } from '../lib/chat'
 import { slashLabel } from '../lib/slash'
 import { log } from '../lib/log'
-import { C } from '../lib/theme'
+import { C, useStyles } from '../lib/theme'
 
 type Step = 'provider' | 'model' | 'scope'
 
 export function ModelPickerSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const s = useStyles(makeS)
   const options = useStore(modelOptions)
   const loading = useStore(modelOptionsLoading)
   const curModel = useStore(liveModel)
@@ -344,6 +345,7 @@ export function ModelPickerSheet({ open, onClose }: { open: boolean; onClose: ()
 }
 
 function ProviderRow({ p, onPress, currentModel }: { p: ProviderOption; onPress: () => void; currentModel: string }) {
+  const s = useStyles(makeS)
   const count = p.total_models ?? p.models?.length ?? 0
   return (
     <Pressable style={({ pressed }) => [s.row, pressed && s.rowPressed]} onPress={onPress} accessibilityLabel={`Provider ${p.name}`}>
@@ -366,6 +368,7 @@ function ProviderRow({ p, onPress, currentModel }: { p: ProviderOption; onPress:
 function ModelRow({
   m, p, isCurrent, disabled, onPress,
 }: { m: string; p: ProviderOption; isCurrent: boolean; disabled: boolean; onPress: () => void }) {
+  const s = useStyles(makeS)
   const cap = p.capabilities?.[m]
   const price = p.pricing?.[m]
   const priceText = price
@@ -402,6 +405,7 @@ function ModelRow({
 function ScopeCard({
   icon, title, sub, onPress, disabled,
 }: { icon: keyof typeof Ionicons.glyphMap; title: string; sub: string; onPress: () => void; disabled?: boolean }) {
+  const s = useStyles(makeS)
   return (
     <Pressable
       style={({ pressed }) => [s.scopeCard, pressed && s.rowPressed, disabled && s.rowDisabled]}
@@ -419,7 +423,7 @@ function ScopeCard({
   )
 }
 
-const s = StyleSheet.create({
+const makeS = () => StyleSheet.create({
   flex: { flex: 1, justifyContent: 'flex-end' },
   scrim: { backgroundColor: C.scrim },
   sheet: {

@@ -2,7 +2,7 @@ import React, { useState } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { Image } from 'expo-image'
 import { Ionicons } from '@expo/vector-icons'
-import { C } from '../../lib/theme'
+import { C, useStyles } from '../../lib/theme'
 import type { ChatSegment } from '../../lib/chat'
 import { imageFallbackDataUrl, imageSource, isMediaRootPath, probeDownloadError } from '../../lib/mediaCache'
 import { fitWithin, formatBytes, isDataUrlPath, shouldAutoDownload } from '../../lib/media'
@@ -26,6 +26,7 @@ import { MediaViewerModal } from './MediaViewerModal'
  * mapped instead.
  */
 export function ImageBubble({ seg, maxWidth = 220 }: { seg: ChatSegment; maxWidth?: number }) {
+  const s = useStyles(makeS)
   const [viewerOpen, setViewerOpen] = useState(false)
   const [fallbackUri, setFallbackUri] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -128,7 +129,7 @@ export function ImageBubble({ seg, maxWidth = 220 }: { seg: ChatSegment; maxWidt
   )
 }
 
-const s = StyleSheet.create({
+const makeS = () => StyleSheet.create({
   wrap: {
     borderRadius: 16,
     overflow: 'hidden',

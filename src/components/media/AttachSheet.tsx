@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from 'react'
 import { Animated, Modal, Pressable, StyleSheet, Text, View } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
-import { C } from '../../lib/theme'
+import { C, useStyles } from '../../lib/theme'
 
 /**
  * ChatGPT's attach flow: a bottom action sheet, not an OS alert. Three source
@@ -19,6 +19,7 @@ export interface AttachSheetProps {
 }
 
 export function AttachSheet({ visible, onClose, onLibrary, onCamera, onFile }: AttachSheetProps) {
+  const s = useStyles(makeS)
   const slide = useRef(new Animated.Value(0)).current
 
   useEffect(() => {
@@ -73,7 +74,7 @@ export function AttachSheet({ visible, onClose, onLibrary, onCamera, onFile }: A
   )
 }
 
-const s = StyleSheet.create({
+const makeS = () => StyleSheet.create({
   backdrop: { flex: 1, justifyContent: 'flex-end' },
   scrim: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: C.scrim },
   panel: {

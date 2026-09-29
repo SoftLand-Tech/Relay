@@ -24,7 +24,7 @@ import { Ionicons } from '@expo/vector-icons'
 import * as Haptics from 'expo-haptics'
 import { useStore } from '@nanostores/react'
 import { loadCatalog, loadSkillDescriptions, commandCategories, commandCatalog, skillCommands, skillDescriptions, catalogWarning, slashLabel } from '../lib/slash'
-import { C, pill } from '../lib/theme'
+import { C, pill, useStyles } from '../lib/theme'
 
 interface CatalogSection {
   name: string
@@ -41,6 +41,7 @@ export function CommandCatalogSheet({
   /** Runs /help through the gateway for the raw dump (empty-registry path). */
   onRunFallback: () => void
 }) {
+  const s = useStyles(makeS)
   const categories = useStore(commandCategories)
   const catalog = useStore(commandCatalog)
   const skills = useStore(skillCommands)
@@ -248,7 +249,7 @@ function skillMatches(q: string, key: string, origin?: string): boolean {
   return key.replace(/^\//, '').toLowerCase().includes(q) || (origin ?? '').toLowerCase().includes(q)
 }
 
-const s = StyleSheet.create({
+const makeS = () => StyleSheet.create({
   flex: { flex: 1, justifyContent: 'flex-end' },
   sheet: {
     backgroundColor: C.bgElev,

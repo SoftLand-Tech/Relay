@@ -50,6 +50,14 @@ function stub(name: string, value: unknown): void {
 // Metro/RN globals the bundle relies on.
 ;(globalThis as Record<string, unknown>).__DEV__ = true
 
+// Metro turns `require('./x.png')` into an asset descriptor at build time;
+// Node has no such loader, so stand one in (routes may require images).
+const pngLoad = load._load
+load._load = function (id: string, parent: unknown, isMain: boolean): unknown {
+  if (id.endsWith('.png')) return { __metroAsset: true, uri: id }
+  return pngLoad.call(this, id, parent, isMain)
+}
+
 stub('expo', { isRunningInExpoGo: () => true, useEvent: () => ({ status: 'idle' }), useEventListener: () => {} })
 stub('expo-constants', { default: { expoConfig: null, easConfig: null } })
 stub('expo-device', { isDevice: false })

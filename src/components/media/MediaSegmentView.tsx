@@ -1,7 +1,7 @@
 import React from 'react'
 import { StyleSheet, Text, View } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
-import { C } from '../../lib/theme'
+import { C, useStyles } from '../../lib/theme'
 import type { ChatSegment } from '../../lib/chat'
 import { ImageBubble } from './ImageBubble'
 import { VideoBubble } from './VideoBubble'
@@ -14,6 +14,7 @@ import { FileCard } from './FileCard'
  * visual lives in the per-kind components.
  */
 export function MediaSegmentView({ seg }: { seg: ChatSegment }) {
+  const s = useStyles(makeS)
   if (seg.state === 'missing' && !seg.localUri) {
     return (
       <View style={s.errorTile}>
@@ -35,7 +36,7 @@ export function MediaSegmentView({ seg }: { seg: ChatSegment }) {
   }
 }
 
-const s = StyleSheet.create({
+const makeS = () => StyleSheet.create({
   errorTile: {
     minHeight: 60,
     borderRadius: 16,

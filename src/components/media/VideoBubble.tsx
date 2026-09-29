@@ -3,7 +3,7 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-nati
 import { VideoView, useVideoPlayer } from 'expo-video'
 import { useEvent } from 'expo'
 import { Ionicons } from '@expo/vector-icons'
-import { C } from '../../lib/theme'
+import { C, useStyles } from '../../lib/theme'
 import type { ChatSegment } from '../../lib/chat'
 import { probeDownloadError, videoSource } from '../../lib/mediaCache'
 import { formatBytes } from '../../lib/media'
@@ -23,6 +23,7 @@ import { formatBytes } from '../../lib/media'
  * into a retry row — matching the image/audio/file bubbles.
  */
 export function VideoBubble({ seg }: { seg: ChatSegment }) {
+  const s = useStyles(makeS)
   const [playing, setPlaying] = useState(false)
   // Bumping the attempt remounts the player (its source is fixed at mount).
   const [attempt, setAttempt] = useState(0)
@@ -72,6 +73,7 @@ function VideoPlayerMount({
   onStaleLocal: () => void
   onRetry: () => void
 }) {
+  const s = useStyles(makeS)
   const player = useVideoPlayer(
     // Local optimistic copies play straight from disk; gateway videos stream.
     seg.localUri ? { uri: seg.localUri } : videoSource(seg.path!),
@@ -134,7 +136,7 @@ function VideoPlayerMount({
   )
 }
 
-const s = StyleSheet.create({
+const makeS = () => StyleSheet.create({
   tile: {
     flexDirection: 'row',
     alignItems: 'center',

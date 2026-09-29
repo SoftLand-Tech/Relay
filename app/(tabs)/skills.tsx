@@ -5,7 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
 import { useStore } from '@nanostores/react'
 import { ScreenShell } from '../../src/components/ScreenShell'
-import { C } from '../../src/lib/theme'
+import { C, useStyles } from '../../src/lib/theme'
 import { loadCatalog, loadSkillDescriptions, commandCatalog, commandCategories, commandDescriptions, skillCommands, skillDescriptions } from '../../src/lib/slash'
 import { isConnected as isConnectedAtom } from '../../src/lib/gateway'
 
@@ -15,6 +15,7 @@ import { isConnected as isConnectedAtom } from '../../src/lib/gateway'
  * so nothing is hardcoded and new server-side commands appear automatically.
  */
 export default function Skills() {
+  const s = useStyles(makeS)
   const router = useRouter()
   const online = useStore(isConnectedAtom)
   const skills = useStore(skillCommands)
@@ -156,7 +157,7 @@ export default function Skills() {
   )
 }
 
-const s = StyleSheet.create({
+const makeS = () => StyleSheet.create({
   safe: { flex: 1, backgroundColor: C.bg },
   searchWrap: { paddingHorizontal: 16, paddingBottom: 8 },
   search: { backgroundColor: C.bgCard, borderRadius: 20, paddingHorizontal: 16, paddingVertical: 12, color: C.text, fontSize: 15, minHeight: 44 },

@@ -13,7 +13,7 @@
  */
 import React, { useEffect, useRef, useState } from 'react'
 import { AccessibilityInfo, Animated, Easing, Pressable, StyleSheet } from 'react-native'
-import { C } from '../lib/theme'
+import { C, useStyles } from '../lib/theme'
 import { MochiStage } from './Mascot'
 
 /** Same width as the native splash `imageWidth`, so frame one matches it. */
@@ -29,6 +29,7 @@ const CROSSFADE_AT = 650
 const EXIT_AT = 3250
 
 export function AnimatedSplash({ onDone }: { onDone: () => void }) {
+  const s = useStyles(makeS)
   const [reduced, setReduced] = useState(false)
   // Overlay starts as a pixel-for-pixel match of the native splash.
   const settle = useRef(new Animated.Value(1.045)).current
@@ -130,7 +131,7 @@ export function AnimatedSplash({ onDone }: { onDone: () => void }) {
   )
 }
 
-const s = StyleSheet.create({
+const makeS = () => StyleSheet.create({
   overlay: {
     position: 'absolute',
     top: 0,

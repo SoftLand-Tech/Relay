@@ -4,7 +4,7 @@ import { Ionicons } from '@expo/vector-icons'
 import { CameraView, useCameraPermissions } from 'expo-camera'
 import { connect, normalizeHost } from '../lib/gateway'
 import { parseConnectUrl } from '../lib/pairing'
-import { C } from '../lib/theme'
+import { C, useStyles } from '../lib/theme'
 
 /**
  * Pairing UI, shared by onboarding (app/index) and "Add computer"
@@ -13,6 +13,7 @@ import { C } from '../lib/theme'
  * (paste a link, type host/token by hand) stays folded under "More options".
  */
 export function PairForm({ onPaired }: { onPaired: () => void }) {
+  const s = useStyles(makeS)
   const [host, setHost] = useState('')
   const [token, setToken] = useState('')
   const [tls, setTls] = useState(false)
@@ -193,7 +194,7 @@ export function PairForm({ onPaired }: { onPaired: () => void }) {
   )
 }
 
-const s = StyleSheet.create({
+const makeS = () => StyleSheet.create({
   pressed: { opacity: 0.6 },
   scanBtn: {
     backgroundColor: C.accent, borderRadius: 14, paddingVertical: 16, paddingHorizontal: 18,

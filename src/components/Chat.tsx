@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { View, Text, StyleSheet, Pressable, ActivityIndicator, Animated, AccessibilityInfo } from 'react-native'
+import { View, Text, StyleSheet, Pressable, ActivityIndicator, Animated, AccessibilityInfo, Image } from 'react-native'
 // The maintained fork. The original `react-native-markdown-display` pins
 // markdown-it 10, which does `require('punycode')` — a Node builtin that
 // Metro's Hermes runtime does not provide, so it breaks the Android bundle.
@@ -10,7 +10,7 @@ import * as Clipboard from 'expo-clipboard'
 import * as Speech from 'expo-speech'
 import { Ionicons } from '@expo/vector-icons'
 import { speakText, stopTts } from '../lib/voice'
-import { C } from '../lib/theme'
+import { C, S, useStyles, useShape } from '../lib/theme'
 import { formatThinkMeta, type ChatMessage, type ChatSegment, type ToolItem } from '../lib/chat'
 import { MediaSegmentView } from './media/MediaSegmentView'
 import { CommandCard } from './CommandOutput'
@@ -29,10 +29,10 @@ function fmtTime(ts: number): string {
   }
 }
 
-const mdBase = {
+const makeMdBase = () => ({
   body: { color: C.text, fontSize: 16, lineHeight: 24 },
   paragraph: { marginTop: 0, marginBottom: 12 },
-  code_inline: { color: C.accent, backgroundColor: 'rgba(247,146,54,0.12)', borderRadius: 4, paddingHorizontal: 5, fontSize: 14.5 },
+  code_inline: { color: C.accent, backgroundColor: C.accentSoft, borderRadius: 4, paddingHorizontal: 5, fontSize: 14.5 },
   fence: { color: C.text, backgroundColor: C.bgCard, borderRadius: 10, padding: 12, fontSize: 13, fontFamily: 'monospace' },
   code_block: { color: C.text, backgroundColor: C.bgCard, borderRadius: 10, padding: 12, fontSize: 13, fontFamily: 'monospace' },
   blockquote: { backgroundColor: 'transparent', borderLeftColor: C.border, marginLeft: 0, paddingLeft: 12 },
@@ -46,16 +46,20 @@ const mdBase = {
   table: { borderColor: C.border },
   th: { color: C.text, borderColor: C.border },
   td: { color: C.textDim, borderColor: C.border },
-}
+})
 
-export const mdStyles = mdBase as never
+/** Theme-reactive markdown styles — fetch through useStyles in components. */
+export const makeMdStyles = () => makeMdBase() as never
 
 /** Denser markdown for command-output cards: 14.5/21 body, tighter paragraphs. */
-export const cardMdStyles = {
-  ...mdBase,
-  body: { ...mdBase.body, fontSize: 14.5, lineHeight: 21 },
-  paragraph: { ...mdBase.paragraph, marginBottom: 8 },
-} as never
+export const makeCardMdStyles = () => {
+  const mdBase = makeMdBase()
+  return {
+    ...mdBase,
+    body: { ...mdBase.body, fontSize: 14.5, lineHeight: 21 },
+    paragraph: { ...mdBase.paragraph, marginBottom: 8 },
+  } as never
+}
 
 /**
  * Three bouncing dots — the "the agent is on it" pulse, shown wherever a
@@ -64,6 +68,7 @@ export const cardMdStyles = {
  * Static (faded) dots under the OS reduce-motion setting.
  */
 export const ThinkingDots = React.memo(function ThinkingDots() {
+  const s = useStyles(makeS)
   const [reduce, setReduce] = useState(false)
   useEffect(() => {
     AccessibilityInfo.isReduceMotionEnabled().then(setReduce).catch(() => {})
@@ -124,6 +129,9 @@ export const MessageBubble = React.memo(function MessageBubble({
    *  block — including ones already in the transcript — not just future ones. */
   showThinking?: boolean
 }) {
+  const s = useStyles(makeS)
+  const md = useStyles(makeMdStyles)
+  const S = useShape()
   const isUser = m.role === 'user'
   const [copied, setCopied] = useState(false)
   const [speakState, setSpeakState] = useState<'idle' | 'loading' | 'playing'>('idle')
@@ -182,6 +190,12 @@ export const MessageBubble = React.memo(function MessageBubble({
     )
     return (
       <View style={s.botWrap}>
+        {S.assistantAvatar ? (
+          <View style={s.avatarWrap}>
+            <Image source={MOCHI_AVATAR} style={s.avatarImg} />
+          </View>
+        ) : null}
+        <View style={[s.botBody, S.assistantCard && s.botCard]}>
         {segs.map((seg, i) =>
           seg.kind === 'media' ? (
             <MediaSegmentView key={i} seg={seg} />
@@ -203,7 +217,7 @@ export const MessageBubble = React.memo(function MessageBubble({
             // render happens once, when the segment completes.
             <Text key={i} style={s.streamText}>{seg.text}</Text>
           ) : (
-            <Markdown key={i} style={mdStyles}>{seg.text}</Markdown>
+            <Markdown key={i} style={md}>{seg.text}</Markdown>
           ),
         )}
         {m.streaming ? (hasVisibleText ? <Text style={s.cursor}>▍</Text> : <ThinkingDots />) : null}
@@ -238,6 +252,7 @@ export const MessageBubble = React.memo(function MessageBubble({
             </Pressable>
           </View>
         ) : null}
+        </View>
       </View>
     )
   }
@@ -303,6 +318,7 @@ export const ThinkingBlock = React.memo(function ThinkingBlock({
   /** Opens the /reasoning chooser; config.set applies it mid-session. */
   onEffortPress?: () => void
 }) {
+  const s = useStyles(makeS)
   const [open, setOpen] = useState(false)
   const [now, setNow] = useState(() => Date.now())
   const hasText = !!seg.text.trim()
@@ -345,6 +361,7 @@ export const ThinkingBlock = React.memo(function ThinkingBlock({
 })
 
 export const ToolRow = React.memo(function ToolRow({ t }: { t: ToolItem }) {
+  const s = useStyles(makeS)
   const color = t.status === 'running' ? C.accent : t.status === 'failed' ? C.red : C.greenSoft
   return (
     <View style={s.toolRow} accessibilityLabel={`${t.name} ${t.status}`}>
@@ -364,18 +381,55 @@ export const ToolRow = React.memo(function ToolRow({ t }: { t: ToolItem }) {
   )
 })
 
-const s = StyleSheet.create({
-  botWrap: { paddingHorizontal: 16, paddingVertical: 10 },
+/** Mochi's face, pre-rendered from mochi-svgs/mochi.svg (scripts render pipeline). */
+const MOCHI_AVATAR = require('../../assets/mochi-avatar.png')
+
+const makeS = () => StyleSheet.create({
+  botWrap: {
+    flexDirection: 'row',
+    gap: 8,
+    paddingHorizontal: S.assistantAvatar ? 12 : 16,
+    paddingVertical: 10,
+  },
+  // Mocheme: assistant replies sit in a soft blob card; Relay runs unboxed.
+  botBody: { flex: 1, minWidth: 0 },
+  botCard: {
+    backgroundColor: C.bgCard,
+    borderWidth: 1,
+    borderColor: C.border,
+    borderRadius: S.radiusCard + 6,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    shadowColor: '#000',
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 5,
+  },
+  avatarWrap: { width: 30, height: 30, borderRadius: 15, overflow: 'hidden', marginTop: 2 },
+  avatarImg: { width: 30, height: 30 },
   userWrap: { paddingHorizontal: 16, paddingVertical: 6, alignItems: 'flex-end' },
-  userBubble: { backgroundColor: C.userBubble, borderRadius: 20, paddingHorizontal: 16, paddingVertical: 10, maxWidth: '88%' },
+  userBubble: {
+    backgroundColor: C.userBubble,
+    borderRadius: S.radiusBubble,
+    borderBottomRightRadius: S.radiusBubbleTail,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    maxWidth: '88%',
+    shadowColor: '#000',
+    shadowOpacity: S.radiusBubbleTail < S.radiusBubble ? 0.35 : 0,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: S.radiusBubbleTail < S.radiusBubble ? 4 : 0,
+  },
   // Media rows: the photo/doc sits flush inside the bubble like ChatGPT's —
   // tighter padding, no double-inset around the media tiles.
   userBubbleMedia: { paddingHorizontal: 6, paddingVertical: 6, gap: 6 },
-  userText: { color: C.text, fontSize: 16, lineHeight: 23 },
+  userText: { color: C.userText, fontSize: 16, lineHeight: 23 },
   streamText: { color: C.text, fontSize: 16, lineHeight: 24 },
   cursor: { color: C.textDim, fontSize: 15, marginTop: 2 },
   dotsRow: { flexDirection: 'row', alignItems: 'center', gap: 3, height: 12, marginTop: 2 },
-  dot: { width: 5, height: 5, borderRadius: 3, backgroundColor: C.textFaint },
+  dot: { width: 5, height: 5, borderRadius: 3, backgroundColor: C.blush },
   botActions: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 6, marginLeft: -6 },
   iconBtn: { width: 30, height: 30, alignItems: 'center', justifyContent: 'center', borderRadius: 15 },
   iconPressed: { opacity: 0.5 },
@@ -384,7 +438,17 @@ const s = StyleSheet.create({
   failedText: { color: C.red, fontSize: 12.5, flexShrink: 1 },
   retryBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: C.bgCard, borderRadius: 14, paddingHorizontal: 10, height: 30 },
   retryText: { color: C.text, fontSize: 12, fontWeight: '700' },
-  think: { backgroundColor: C.bgCard, borderRadius: 12, padding: 10, marginBottom: 8 },
+  think: {
+    backgroundColor: C.bgCard,
+    borderRadius: S.dashedThinking ? 999 : S.radiusCard,
+    borderWidth: S.dashedThinking ? 1.5 : 0,
+    borderStyle: 'dashed',
+    borderColor: C.thinkBorder,
+    paddingHorizontal: S.dashedThinking ? 14 : 10,
+    paddingVertical: S.dashedThinking ? 8 : 10,
+    marginBottom: 8,
+    alignSelf: S.dashedThinking ? 'flex-start' : 'stretch',
+  },
   thinkHead: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   thinkLabel: { color: C.textFaint, fontSize: 11.5, fontWeight: '600' },
   thinkText: { color: C.textDim, fontSize: 12.5, lineHeight: 18, marginTop: 6 },

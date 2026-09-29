@@ -7,9 +7,10 @@ import { Ionicons } from '@expo/vector-icons'
 import { PairForm } from '../src/components/PairForm'
 import { MochiStage } from '../src/components/Mascot'
 import { servers as serversStore, switchToServer } from '../src/lib/gateway'
-import { C } from '../src/lib/theme'
+import { C, useStyles } from '../src/lib/theme'
 
 export default function Onboarding() {
+  const s = useStyles(makeS)
   const saved = useStore(serversStore)
   const [switchingId, setSwitchingId] = useState<string | null>(null)
   const [switchErr, setSwitchErr] = useState<string | null>(null)
@@ -70,7 +71,7 @@ export default function Onboarding() {
   )
 }
 
-const s = StyleSheet.create({
+const makeS = () => StyleSheet.create({
   safe: { flex: 1, backgroundColor: C.bg },
   root: { flex: 1, backgroundColor: C.bg },
   pressed: { opacity: 0.6 },

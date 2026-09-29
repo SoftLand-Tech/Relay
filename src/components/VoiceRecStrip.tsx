@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react'
 import { View, Text, Pressable, StyleSheet, Animated, AccessibilityInfo } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import type { AudioRecorder } from 'expo-audio'
-import { C } from '../lib/theme'
+import { C, useStyles } from '../lib/theme'
 import { REC_POLL_MS, pushLevel, barsFromLevels, formatRecSecs } from '../lib/voiceLevels'
 
 const BAR_COUNT = 26
@@ -27,6 +27,7 @@ export const VoiceRecStrip = React.memo(function VoiceRecStrip({
   secs: number
   onCancel: () => void
 }) {
+  const st = useStyles(makeSt)
   const [levels, setLevels] = useState<number[]>([])
   const [reduce, setReduce] = useState(false)
   useEffect(() => {
@@ -92,7 +93,7 @@ export const VoiceRecStrip = React.memo(function VoiceRecStrip({
   )
 })
 
-const st = StyleSheet.create({
+const makeSt = () => StyleSheet.create({
   strip: {
     flex: 1,
     flexDirection: 'row',

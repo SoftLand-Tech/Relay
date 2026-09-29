@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native'
 import { Image } from 'expo-image'
 import { Ionicons } from '@expo/vector-icons'
-import { C } from '../../lib/theme'
+import { C, useStyles } from '../../lib/theme'
 import { ATTACH_RATE_KBPS, estSecondsFor, formatBytes, formatDuration, mediaKindForPath } from '../../lib/media'
 import type { PendingAttachment } from '../../lib/mediaSend'
 
@@ -22,6 +22,7 @@ export function AttachmentChip({
   onRemove: () => void
   onRetry?: () => void
 }) {
+  const s = useStyles(makeS)
   const active = att.state === 'preparing' || att.state === 'uploading'
   const [elapsed, setElapsed] = useState(0)
 
@@ -73,7 +74,7 @@ export function AttachmentChip({
   )
 }
 
-const s = StyleSheet.create({
+const makeS = () => StyleSheet.create({
   chip: {
     flexDirection: 'row',
     alignItems: 'center',

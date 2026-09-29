@@ -23,8 +23,8 @@ import * as Haptics from 'expo-haptics'
 import Markdown from '@ronradtke/react-native-markdown-display'
 import type { ChatMessage } from '../lib/chat'
 import { commandCatalog, skillCommands, slashLabel, parseStatusPairs, type CommandMeta, type CommandVariant } from '../lib/slash'
-import { C, pill } from '../lib/theme'
-import { cardMdStyles } from './Chat'
+import { C, pill, useStyles } from '../lib/theme'
+import { makeCardMdStyles } from './Chat'
 
 function fmtTime(ts: number): string {
   try {
@@ -101,6 +101,8 @@ export const CommandCard = React.memo(function CommandCard({
   /** Opens the command catalog browser (error hint chip, catalog footer). */
   onOpenCatalog?: () => void
 }) {
+  const s = useStyles(makeS)
+  const md = useStyles(makeCardMdStyles)
   const [copied, setCopied] = useState(false)
   const [expanded, setExpanded] = useState(false)
   // Subscribed, not .get(): the memoized row never re-reads, so a card restored
@@ -189,7 +191,7 @@ export const CommandCard = React.memo(function CommandCard({
 
       <View style={s.body}>
         {variant === 'result' || (variant === 'status' && !statusUsable) ? (
-          <Markdown style={cardMdStyles}>{shown.join('\n')}</Markdown>
+          <Markdown style={md}>{shown.join('\n')}</Markdown>
         ) : variant === 'error' || variant === 'usage' ? (
           <>
             <View style={[s.alertBox, { backgroundColor: variant === 'error' ? C.redSoft : C.amberSoft }]}>
@@ -340,7 +342,7 @@ function catalogSummaryText(cmds: Record<string, unknown>, skills: Record<string
   return `${counts ? `${counts} in the gateway catalog` : 'The gateway catalog is not loaded'}. Open the browser to browse or insert.`
 }
 
-const s = StyleSheet.create({
+const makeS = () => StyleSheet.create({
   card: {
     backgroundColor: C.bgCard,
     borderRadius: 14,

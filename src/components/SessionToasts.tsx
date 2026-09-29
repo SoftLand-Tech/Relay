@@ -5,7 +5,7 @@ import { useRouter } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useStore } from '@nanostores/react'
 import { dismissToast, requestOpenSession, toasts, type SessionToast } from '../lib/attention'
-import { C } from '../lib/theme'
+import { C, useStyles } from '../lib/theme'
 
 /**
  * In-app counterpart of a push notification: when something happens in a
@@ -26,6 +26,7 @@ const KIND_META = {
 }
 
 function ToastCard({ t }: { t: SessionToast }) {
+  const s = useStyles(makeS)
   const router = useRouter()
   const meta = KIND_META[t.kind]
   // Cards mount at their resting place with opacity 0 and fade/slide in —
@@ -81,7 +82,7 @@ export function SessionToasts() {
   )
 }
 
-const s = StyleSheet.create({
+const makeS = () => StyleSheet.create({
   card: {
     flexDirection: 'row',
     alignItems: 'center',

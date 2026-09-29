@@ -13,7 +13,7 @@ import {
   busyStoredIds,
   pendingCount,
 } from '../../src/lib/chat'
-import { C } from '../../src/lib/theme'
+import { C, useStyles } from '../../src/lib/theme'
 import { attentionById, rowStatus } from '../../src/lib/attention'
 import { ScreenShell } from '../../src/components/ScreenShell'
 import { StatusDot } from '../../src/components/Sidebar'
@@ -32,6 +32,7 @@ interface Sess {
 // drawer) so both agree on the unit.
 
 function fmtWhen(ts?: number): string {
+  const s = useStyles(makeS)
   const ms = toMs(ts)
   if (!ms) return ''
   const d = new Date(ms)
@@ -48,6 +49,7 @@ function fmtWhen(ts?: number): string {
 }
 
 export default function Sessions() {
+  const s = useStyles(makeS)
   return (
     <SafeAreaView style={s.frame} edges={['bottom']}>
       <SessionsInner />
@@ -56,6 +58,7 @@ export default function Sessions() {
 }
 
 function SessionsInner() {
+  const s = useStyles(makeS)
   const list = useStore(sessionRows)
   const [query, setQuery] = useState('')
   const [refreshing, setRefreshing] = useState(false)
@@ -229,7 +232,7 @@ function SessionsInner() {
   )
 }
 
-const s = StyleSheet.create({
+const makeS = () => StyleSheet.create({
   frame: { flex: 1, backgroundColor: C.bg },
   root: { flex: 1, backgroundColor: C.bg },
   searchRow: { paddingHorizontal: 16, paddingBottom: 10, flexDirection: 'row', gap: 8 },

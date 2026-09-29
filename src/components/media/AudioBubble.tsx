@@ -3,7 +3,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { useAudioPlayer, useAudioPlayerStatus } from 'expo-audio'
 import { Ionicons } from '@expo/vector-icons'
 import { useStore } from '@nanostores/react'
-import { C } from '../../lib/theme'
+import { C, useStyles } from '../../lib/theme'
 import type { ChatSegment } from '../../lib/chat'
 import { cacheKeyFor, formatBytes, formatDuration } from '../../lib/media'
 import { downloadMediaFile } from '../../lib/mediaCache'
@@ -16,6 +16,7 @@ import { mediaStateForKey } from '../../lib/mediaState'
  * an inline error row whose tap retries the same download.
  */
 export function AudioBubble({ seg }: { seg: ChatSegment }) {
+  const s = useStyles(makeS)
   // mediaStateForKey always returns a live computed (idle for unknown keys),
   // so an optimistic row without a gateway path yet just subscribes to idle.
   const load = useStore(mediaStateForKey(seg.path ? cacheKeyFor(seg.path) : '_idle_'))
@@ -27,6 +28,7 @@ export function AudioBubble({ seg }: { seg: ChatSegment }) {
 
   useEffect(() => {
     if (localUri && pendingPlay.current) {
+  const s = useStyles(makeS)
       pendingPlay.current = false
       player.play()
     }
@@ -117,7 +119,7 @@ export function AudioBubble({ seg }: { seg: ChatSegment }) {
   )
 }
 
-const s = StyleSheet.create({
+const makeS = () => StyleSheet.create({
   wrap: {
     backgroundColor: C.bgElev,
     borderRadius: 16,

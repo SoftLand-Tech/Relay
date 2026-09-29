@@ -17,10 +17,11 @@ import {
 import type { GestureResponderEvent, PanResponderGestureState, ViewStyle } from 'react-native'
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { usePathname } from 'expo-router'
 import { useStore } from '@nanostores/react'
 import { archivedIds, groupChats, pinnedIds } from '../lib/chatListState'
 import type { RowStatus } from '../lib/attention'
-import { C } from '../lib/theme'
+import { C, S, useStyles, useShape } from '../lib/theme'
 
 export interface NavItem {
   key: string
@@ -201,6 +202,10 @@ export function Sidebar({
   onDelete,
   footer,
 }: Props) {
+  const s = useStyles(makeS)
+  const S = useShape()
+  const pathname = usePathname()
+  const activeKey = nav.find((n) => pathname?.endsWith(n.key))?.key
   const { width, height } = useWindowDimensions()
   const insets = useSafeAreaInsets()
   const anim = useRef(new Animated.Value(0)).current
@@ -616,14 +621,22 @@ export function Sidebar({
           {nav.map((item) => (
             <Pressable
               key={item.key}
-              style={({ pressed }) => [s.navRow, pressed && s.rowPressed]}
+              style={({ pressed }) => [
+                s.navRow,
+                item.key === activeKey && S.drawerRoundedCap && s.navRowOn,
+                pressed && s.rowPressed,
+              ]}
               onPress={() => {
                 onNav(item.key)
                 onClose()
               }}
               accessibilityLabel={item.label}
             >
-              <Ionicons name={item.icon} size={20} color={C.text} />
+              <Ionicons
+                name={item.icon}
+                size={20}
+                color={item.key === activeKey && S.drawerRoundedCap ? C.accent : C.text}
+              />
               <Text style={s.navLabel}>{item.label}</Text>
               {item.badge ? (
                 <View style={s.badge}>
@@ -843,6 +856,7 @@ function MenuRow({
   danger?: boolean
   onPress: () => void
 }) {
+  const s = useStyles(makeS)
   return (
     <Pressable
       style={({ pressed }) => [s.menuRow, pressed && s.menuRowPressed]}
@@ -874,6 +888,7 @@ const RecentRow = React.memo(function RecentRow({
   onCloseDrawer: () => void
   onMenu: (c: RecentChat, e?: GestureResponderEvent) => void
 }) {
+  const s = useStyles(makeS)
   return (
     <Pressable
       onPress={() => {
@@ -902,7 +917,7 @@ const RecentRow = React.memo(function RecentRow({
   )
 })
 
-const s = StyleSheet.create({
+const makeS = () => StyleSheet.create({
   // Left-edge catch strip for the swipe-to-open gesture. `top` is set inline
   // (insets.top + EDGE_TOP_GAP) to clear the top bar/hamburger.
   edgeStrip: {
@@ -918,7 +933,14 @@ const s = StyleSheet.create({
     left: 0,
     backgroundColor: C.bgElev,
     borderRightWidth: 1,
-    borderRightColor: C.borderSoft,
+    borderRightColor: S.drawerRoundedCap ? C.border : C.borderSoft,
+    borderTopRightRadius: S.drawerRoundedCap ? 28 : 0,
+    borderBottomRightRadius: S.drawerRoundedCap ? 28 : 0,
+    shadowColor: '#000',
+    shadowOpacity: S.drawerRoundedCap ? 0.45 : 0,
+    shadowRadius: 40,
+    shadowOffset: { width: 12, height: 0 },
+    elevation: S.drawerRoundedCap ? 16 : 0,
   },
   header: {
     flexDirection: 'row',
@@ -941,7 +963,11 @@ const s = StyleSheet.create({
     paddingHorizontal: 16,
     minHeight: 48,
     justifyContent: 'flex-start',
+    marginHorizontal: S.drawerRoundedCap ? 10 : 0,
+    borderRadius: S.drawerRoundedCap ? 16 : 0,
   },
+  // Mocheme's active nav row: a soft wash of the accent instead of nothing.
+  navRowOn: { backgroundColor: C.accentSoft },
   rowPressed: { backgroundColor: C.bgHover },
   navLabel: { color: C.text, fontSize: 15.5, fontWeight: '500', flex: 1 },
   badge: {
