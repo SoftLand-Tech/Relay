@@ -307,7 +307,7 @@ export default function Automations() {
       {/* Add / edit sheet */}
       <Modal visible={!!form} animationType="slide" onRequestClose={() => { if (!form?.saving) setForm(null) }}>
         <SafeAreaView style={s.modalSafe}>
-          <KeyboardAvoidingView style={s.modalRoot} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+          <KeyboardAvoidingView style={s.modalRoot} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
             <View style={s.modalHead}>
               <Pressable
                 style={({ pressed }) => [s.modalTextBtn, pressed && s.btnPressed]}

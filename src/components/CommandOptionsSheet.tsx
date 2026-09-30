@@ -85,7 +85,7 @@ export function CommandOptionsSheet({
 
   return (
     <Modal visible transparent animationType="fade" onRequestClose={onClose}>
-      <KeyboardAvoidingView style={s.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <KeyboardAvoidingView style={s.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
         <Pressable style={[StyleSheet.absoluteFill, { backgroundColor: C.scrim }]} onPress={onClose} accessibilityLabel="Close" />
         <View style={s.sheet}>
           <View style={s.head}>
