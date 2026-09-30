@@ -41,7 +41,10 @@ export function AnimatedSplash({ onDone }: { onDone: () => void }) {
   const mochiIn = useRef(new Animated.Value(0)).current
   const intro = useRef<Animated.CompositeAnimation | null>(null)
   const timers = useRef<ReturnType<typeof setTimeout>[]>([])
+  /** The rAF-stall safety timer — never cleared by skip(), only by unmount. */
+  const safety = useRef<ReturnType<typeof setTimeout> | null>(null)
   const skipped = useRef(false)
+  const done = useRef(false)
 
   useEffect(() => {
     let live = true
@@ -51,8 +54,10 @@ export function AnimatedSplash({ onDone }: { onDone: () => void }) {
     return () => { live = false }
   }, [])
 
-  /** Exit: the brand moment passes through into the app. */
+  /** Exit: the brand moment passes through into the app. Fires once. */
   const exit = (duration: number) => {
+    if (done.current) return
+    done.current = true
     Animated.parallel([
       Animated.timing(fade, { toValue: 0, duration, easing: Easing.in(Easing.quad), useNativeDriver: true }),
       Animated.timing(exitScale, { toValue: 1.06, duration, easing: Easing.in(Easing.quad), useNativeDriver: true }),
@@ -88,9 +93,18 @@ export function AnimatedSplash({ onDone }: { onDone: () => void }) {
       // Leave on the wake arc's payoff instead of a fixed beat.
       setTimeout(() => exit(400), EXIT_AT),
     ]
+    // Safety net: the exit above completes via an animation callback, which
+    // never fires if the page's animation frames are stalled (an occluded
+    // web view keeps timers but freezes rAF — the overlay then sat on the
+    // app forever and ate every tap). Plain timers still run in that state,
+    // so the handoff is guaranteed even when the fade can't play. The
+    // healthy path unmounts first and clears this in cleanup; onDone is an
+    // idempotent setState, so a stray late call is harmless.
+    safety.current = setTimeout(() => onDone(), EXIT_AT + 1600)
     return () => {
       intro.current?.stop()
       timers.current.forEach(clearTimeout)
+      if (safety.current) { clearTimeout(safety.current); safety.current = null }
     }
     // onDone is a setState wrapper from the root layout — stable in practice.
   }, [reduced])

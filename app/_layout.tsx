@@ -8,6 +8,7 @@ import * as Linking from 'expo-linking'
 import * as SplashScreen from 'expo-splash-screen'
 import { initPush, lastNotificationResponse, onNotificationResponse, clearLastNotificationResponse, type NotificationTarget } from '../src/lib/push'
 import { AnimatedSplash } from '../src/components/AnimatedSplash'
+import { AlertDialogHost } from '../src/components/AlertDialog'
 import { SessionToasts } from '../src/components/SessionToasts'
 import { MochiStage } from '../src/components/Mascot'
 import {
@@ -143,6 +144,7 @@ export default function RootLayout() {
           <View style={s.toast}><Text style={s.toastText}>{linkMsg}</Text></View>
         ) : null}
       </View>
+      <AlertDialogHost />
       {splash}
       </>
     )
@@ -245,6 +247,8 @@ export default function RootLayout() {
       {/* Attention toasts — above every screen, under nothing but the
           (transient) splash. Tapping one deep-links to its chat. */}
       <SessionToasts />
+      {/* Themed dialogs (showAlert) — one host for the whole app. */}
+      <AlertDialogHost />
     </View>
     {splash}
     </KeyboardProvider>

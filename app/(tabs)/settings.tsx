@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react'
-import { View, Text, Pressable, ScrollView, StyleSheet, Alert, Switch } from 'react-native'
+import { View, Text, Pressable, ScrollView, StyleSheet, Switch } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { computed } from 'nanostores'
 import { useStore } from '@nanostores/react'
@@ -18,6 +18,7 @@ import {
 } from '../../src/lib/push'
 import { C, useStyles, setTheme, THEME_OPTIONS, themeId, type ThemeId } from '../../src/lib/theme'
 import { ScreenShell } from '../../src/components/ScreenShell'
+import { showAlert } from '../../src/components/AlertDialog'
 
 export default function Settings() {
   const s = useStyles(makeS)
@@ -167,18 +168,18 @@ function SettingsInner() {
       logText().slice(-4000),
     ].join('\n')
     await Clipboard.setStringAsync(text)
-    Alert.alert('Copied', 'Diagnostics copied to clipboard.')
+    showAlert('Copied', 'Diagnostics copied to clipboard.')
   }
 
   const exportTranscript = async () => {
     const text = messages.get().map((m) => `[${new Date(m.ts).toLocaleString()}] ${m.role}: ${m.text}`).join('\n\n')
-    if (!text) { Alert.alert('Empty', 'No messages to export.'); return }
+    if (!text) { showAlert('Empty', 'No messages to export.'); return }
     await Clipboard.setStringAsync(text.slice(0, 50000))
-    Alert.alert('Copied', 'Transcript copied to clipboard.')
+    showAlert('Copied', 'Transcript copied to clipboard.')
   }
 
   const forgetCurrent = () => {
-    Alert.alert('Forget this computer?', 'Removes the current computer from this device. Others stay saved.', [
+    showAlert('Forget this computer?', 'Removes the current computer from this device. Others stay saved.', [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Forget', style: 'destructive', onPress: async () => {
         const remaining = await forgetActiveServer()
@@ -192,9 +193,9 @@ function SettingsInner() {
   }
 
   const confirmNewChat = () => {
-    Alert.alert('New chat?', 'Clears the current transcript and starts a fresh session.', [
+    showAlert('New chat?', 'Clears the current transcript and starts a fresh session.', [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Start', onPress: () => { void newChat().catch((e) => Alert.alert('Failed', String(e))) } },
+      { text: 'Start', onPress: () => { void newChat().catch((e) => showAlert('Failed', String(e))) } },
     ])
   }
 
@@ -234,7 +235,7 @@ function SettingsInner() {
                     <Pressable
                       style={({ pressed }) => [s.serverMain, pressed && s.rowPressed]}
                       disabled={active}
-                      onPress={() => { void switchToServer(sv.id).catch((e) => Alert.alert('Switch failed', e instanceof Error ? e.message : String(e))) }}
+                      onPress={() => { void switchToServer(sv.id).catch((e) => showAlert('Switch failed', e instanceof Error ? e.message : String(e))) }}
                       accessibilityLabel={active ? `Connected to ${sv.name}` : `Switch to ${sv.name}`}
                     >
                       <View style={s.serverLine}>
@@ -247,7 +248,7 @@ function SettingsInner() {
                     <Pressable
                       style={({ pressed }) => [s.serverForget, pressed && s.rowPressed]}
                       hitSlop={8}
-                      onPress={() => Alert.alert('Forget this computer?', `Removes ${sv.name} from this device.`, [
+                      onPress={() => showAlert('Forget this computer?', `Removes ${sv.name} from this device.`, [
                         { text: 'Cancel', style: 'cancel' },
                         { text: 'Forget', style: 'destructive', onPress: () => { void forgetServer(sv) } },
                       ])}
@@ -273,7 +274,7 @@ function SettingsInner() {
             icon="refresh"
             label="Reconnect now"
             chevron
-            onPress={() => { void retryNow().catch((e) => Alert.alert('Retry failed', String(e))) }}
+            onPress={() => { void retryNow().catch((e) => showAlert('Retry failed', String(e))) }}
           />
           <Row
             icon="close-circle-outline"

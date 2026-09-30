@@ -107,6 +107,23 @@ stub('expo-router', {
 })
 stub('expo-linking', { getInitialURL: async () => null, addEventListener: () => ({ remove() {} }) })
 stub('expo-status-bar', { StatusBar: () => null })
+// Bundled in Expo Go (SDK 57 ships keyboard-controller 1.21.9 + reanimated
+// 4.5.1 natively), but its module graph is the first in the app to evaluate
+// react-native-reanimated, whose entry needs TurboModuleRegistry — absent
+// from the react-native stub above. On a real Expo Go install both evaluate
+// fine, so stand in the component surface the app imports.
+stub('react-native-keyboard-controller', {
+  KeyboardProvider: ({ children }: { children: unknown }) => children,
+  KeyboardAvoidingView: ({ children }: { children: unknown }) => children,
+})
+// chat.tsx now imports reanimated directly (keyboard-inset padding). Its
+// module entry needs TurboModuleRegistry, absent from the RN stub above;
+// reanimated ships natively in Expo Go, so stand in the surface chat uses.
+stub('react-native-reanimated', {
+  default: { View: () => null },
+  useAnimatedStyle: () => ({}),
+  createAnimatedComponent: () => (props: unknown) => props,
+})
 stub('@expo/vector-icons', { Ionicons: () => null })
 stub('@ronradtke/react-native-markdown-display', { default: () => null })
 stub('expo-clipboard', { setStringAsync: async () => {} })

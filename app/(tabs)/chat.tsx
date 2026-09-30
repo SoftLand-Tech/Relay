@@ -7,13 +7,13 @@ import {
   FlatList,
   StyleSheet,
   Platform,
-  Alert,
   ActivityIndicator,
   ScrollView,
   type NativeSyntheticEvent,
   type NativeScrollEvent,
 } from 'react-native'
-import { KeyboardAvoidingView } from 'react-native-keyboard-controller'
+import { useReanimatedKeyboardAnimation } from 'react-native-keyboard-controller'
+import Animated, { useAnimatedStyle } from 'react-native-reanimated'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useStore } from '@nanostores/react'
 import { Ionicons } from '@expo/vector-icons'
@@ -74,6 +74,7 @@ import { MessageBubble, ToolRow } from '../../src/components/Chat'
 import { Mascot } from '../../src/components/Mascot'
 import { useMochiState } from '../../src/components/mochi/useMochiState'
 import { ScreenShell } from '../../src/components/ScreenShell'
+import { showAlert } from '../../src/components/AlertDialog'
 import { C, S, useStyles, useShape } from '../../src/lib/theme'
 
 /** Empty-state prompts, styled as plain icon rows the way ChatGPT does. */
@@ -131,6 +132,18 @@ export default function Chat() {
   const [optionSheet, setOptionSheet] = useState<{ command: string; allowText: boolean } | null>(null)
   const listRef = useRef<FlatList>(null)
   const insets = useSafeAreaInsets()
+  // The slash palette tracks input focus, not just the leading "/": a "/"
+  // sitting in the composer while it's unfocused (keyboard dismissed, user
+  // reading the transcript) must not hold the palette open.
+  const [composerFocused, setComposerFocused] = useState(false)
+  // Keyboard avoidance without frame math: `height` tracks the device's real
+  // IME inset (0 closed → −keyboardHeight open, animated in sync by the OS),
+  // so the composer's bottom lands exactly on the keyboard's top edge on any
+  // phone — keyboard height, nav bar and screen geometry are all per-device.
+  // The KAV 'height' behavior undershot here: it derives the lift from a
+  // measured view frame, which doesn't line up on every device (MIUI et al).
+  const kb = useReanimatedKeyboardAnimation()
+  const kbPad = useAnimatedStyle(() => ({ paddingBottom: -kb.height.value }))
   const recorder = useAudioRecorder(REC_OPTIONS)
   const [recording, setRecording] = useState(false)
   const [recSecs, setRecSecs] = useState(0)
@@ -340,7 +353,7 @@ export default function Chat() {
       if (canonical === 'new') {
         updateInput('')
         setSlashItems(null)
-        void newChat().catch((e) => Alert.alert('New chat failed', e instanceof Error ? e.message : String(e)))
+        void newChat().catch((e) => showAlert('New chat failed', e instanceof Error ? e.message : String(e)))
         return
       }
       const target = interactiveTarget(canonical, parsed.args)
@@ -401,7 +414,7 @@ export default function Chat() {
       updateInput('')
       setSlashItems(null)
     } catch (e) {
-      Alert.alert('Command failed', e instanceof Error ? e.message : String(e))
+      showAlert('Command failed', e instanceof Error ? e.message : String(e))
     }
   }
 
@@ -415,7 +428,7 @@ export default function Chat() {
   const canAttach = online && !recording && !(steerMode && busy) // steer is text-only
   const addAttachment = (att: PendingAttachment) => {
     if (att.kind !== 'image' && att.size != null && att.size > ATTACH_MAX_BYTES) {
-      Alert.alert(
+      showAlert(
         'Attachment too large',
         `${att.name} is ${formatBytes(att.size)} — the limit is ${formatBytes(ATTACH_MAX_BYTES)}.`,
       )
@@ -423,7 +436,7 @@ export default function Chat() {
     }
     setPendingAttachments((cur) => {
       if (cur.length >= MAX_ATTACHMENTS) {
-        Alert.alert('Attachment limit', `Up to ${MAX_ATTACHMENTS} files per message.`)
+        showAlert('Attachment limit', `Up to ${MAX_ATTACHMENTS} files per message.`)
         return cur
       }
       return [...cur, att]
@@ -450,13 +463,13 @@ export default function Chat() {
     try {
       const perm = await ImagePicker.requestMediaLibraryPermissionsAsync()
       if (!perm.granted) {
-        Alert.alert('Photos denied', 'Allow photo access to attach images.')
+        showAlert('Photos denied', 'Allow photo access to attach images.')
         return
       }
       const r = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images', 'videos'] })
       if (!r.canceled && r.assets?.length) pickAsset(r.assets[0])
     } catch (e) {
-      Alert.alert('Picker failed', e instanceof Error ? e.message : String(e))
+      showAlert('Picker failed', e instanceof Error ? e.message : String(e))
     }
   }
 
@@ -464,13 +477,13 @@ export default function Chat() {
     try {
       const perm = await ImagePicker.requestCameraPermissionsAsync()
       if (!perm.granted) {
-        Alert.alert('Camera denied', 'Allow camera access to take photos.')
+        showAlert('Camera denied', 'Allow camera access to take photos.')
         return
       }
       const r = await ImagePicker.launchCameraAsync()
       if (!r.canceled && r.assets?.length) pickAsset(r.assets[0])
     } catch (e) {
-      Alert.alert('Camera failed', e instanceof Error ? e.message : String(e))
+      showAlert('Camera failed', e instanceof Error ? e.message : String(e))
     }
   }
 
@@ -492,7 +505,7 @@ export default function Chat() {
         state: 'pick',
       })
     } catch (e) {
-      Alert.alert('Picker failed', e instanceof Error ? e.message : String(e))
+      showAlert('Picker failed', e instanceof Error ? e.message : String(e))
     }
   }
 
@@ -531,7 +544,7 @@ export default function Chat() {
         await steerRun(text)
       } catch (e) {
         updateInput(text)
-        Alert.alert('Steer failed', e instanceof Error ? e.message : 'unknown')
+        showAlert('Steer failed', e instanceof Error ? e.message : 'unknown')
       }
       return
     }
@@ -541,7 +554,7 @@ export default function Chat() {
       // ride the in-memory attach map keyed by the queued id.
       const item = enqueueSend(storedId, text, { allowEmpty: pendingAttachments.length > 0 })
       if (!item) {
-        Alert.alert('Queue full', 'Remove a queued message or wait for the current reply to finish.')
+        showAlert('Queue full', 'Remove a queued message or wait for the current reply to finish.')
         return
       }
       setQueuedAttachments(item.id, pendingAttachments)
@@ -566,7 +579,7 @@ export default function Chat() {
       // attempt had attached was detached server-side, so a re-send cannot
       // duplicate attachments.
       setPendingAttachments((cur) => cur.map((a) => ({ ...a, state: 'pick' as const, error: undefined, path: undefined })))
-      Alert.alert('Send failed', e instanceof Error ? e.message : 'unknown')
+      showAlert('Send failed', e instanceof Error ? e.message : 'unknown')
     }
   }
 
@@ -586,11 +599,11 @@ export default function Chat() {
       await recorder.stop()
       uri = recorder.uri ?? null
     } catch (e) {
-      Alert.alert('Recording failed', e instanceof Error ? e.message : 'unknown')
+      showAlert('Recording failed', e instanceof Error ? e.message : 'unknown')
       return
     }
     if (!uri) {
-      Alert.alert('Recording failed', 'No audio captured.')
+      showAlert('Recording failed', 'No audio captured.')
       return
     }
     try {
@@ -600,7 +613,7 @@ export default function Chat() {
       // dialog here was a tap-to-dismiss speed bump on every voice note.
       updateInput(transcript)
     } catch (e) {
-      Alert.alert('Transcription failed', e instanceof Error ? e.message : 'unknown')
+      showAlert('Transcription failed', e instanceof Error ? e.message : 'unknown')
     }
   }
 
@@ -621,7 +634,7 @@ export default function Chat() {
       }
       const st = await AudioModule.requestRecordingPermissionsAsync()
       if (!st.granted) {
-        Alert.alert('Mic denied', 'Allow microphone access to record voice.')
+        showAlert('Mic denied', 'Allow microphone access to record voice.')
         return
       }
       await recorder.prepareToRecordAsync()
@@ -637,7 +650,7 @@ export default function Chat() {
     } catch (e) {
       stopRecTimer()
       setRecording(false)
-      Alert.alert('Recording failed', e instanceof Error ? e.message : 'unknown')
+      showAlert('Recording failed', e instanceof Error ? e.message : 'unknown')
     }
   }
 
@@ -740,11 +753,7 @@ export default function Chat() {
           ) : null
         }
       >
-        <KeyboardAvoidingView
-          style={s.root}
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
-        >
+        <Animated.View style={[s.root, kbPad]}>
           {!online ? (
             <Pressable
               style={({ pressed }) => [s.banner, pressed && s.btnPressed]}
@@ -937,8 +946,10 @@ export default function Chat() {
             </Pressable>
           ) : null}
 
-          {/* Slash palette */}
-          {slashItems && slashItems.length > 0 ? (
+          {/* Slash palette — only while the composer is focused. The rows'
+              ScrollView is keyboardShouldPersistTaps="handled", so tapping a
+              row never blurs the input and can never race this gate. */}
+          {composerFocused && slashItems && slashItems.length > 0 ? (
             <View style={s.slashPanel}>
               <View style={s.slashHead}>
                 <Icon name="terminal-outline" size={13} color={C.accent} />
@@ -1168,7 +1179,7 @@ export default function Chat() {
                         // (the queued item itself is already gone either way).
                         const room = Math.max(0, MAX_ATTACHMENTS - cur.length)
                         if (atts.length > room) {
-                          Alert.alert('Attachment limit', `Only ${room} of ${atts.length} attachments fit this message.`)
+                          showAlert('Attachment limit', `Only ${room} of ${atts.length} attachments fit this message.`)
                         }
                         return [...cur, ...atts.slice(0, room)]
                       })
@@ -1280,6 +1291,8 @@ export default function Chat() {
                   multiline={Platform.OS !== 'web'}
                   returnKeyType="send"
                   onSubmitEditing={() => { if (Platform.OS === 'web') void send() }}
+                  onFocus={() => setComposerFocused(true)}
+                  onBlur={() => setComposerFocused(false)}
                   accessibilityLabel="Message input"
                 />
               )}
@@ -1382,7 +1395,7 @@ export default function Chat() {
               <Mascot mochi={mochi} />
             </View>
           </View>
-        </KeyboardAvoidingView>
+        </Animated.View>
       </ScreenShell>
     </SafeAreaView>
   )

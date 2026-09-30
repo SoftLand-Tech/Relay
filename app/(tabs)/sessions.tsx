@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
-import { View, Text, FlatList, Pressable, TextInput, StyleSheet, RefreshControl, Alert } from 'react-native'
+import { View, Text, FlatList, Pressable, TextInput, StyleSheet, RefreshControl } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { Icon } from '../../src/components/Icon'
 import { SafeAreaView } from 'react-native-safe-area-context'
@@ -17,6 +17,7 @@ import {
 import { C, useStyles } from '../../src/lib/theme'
 import { attentionById, rowStatus } from '../../src/lib/attention'
 import { ScreenShell } from '../../src/components/ScreenShell'
+import { showAlert } from '../../src/components/AlertDialog'
 import { StatusDot } from '../../src/components/Sidebar'
 import { loadSessions, sessionRows, sessionListLoading, sessionListError, toMs, type SessionRow } from '../../src/lib/sessionList'
 
@@ -113,7 +114,7 @@ function SessionsInner() {
   }, [])
 
   const removeSession = useCallback((s: Sess) => {
-    Alert.alert('Delete this conversation?', s.title || s.preview || 'This permanently removes it from Moch.', [
+    showAlert('Delete this conversation?', s.title || s.preview || 'This permanently removes it from Moch.', [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Delete',
@@ -127,7 +128,7 @@ function SessionsInner() {
             // Drop it from the shared store so the drawer updates too.
             sessionRows.set(sessionRows.get().filter((x) => x.id !== s.id))
           } catch (e) {
-            Alert.alert('Delete failed', e instanceof Error ? e.message : '')
+            showAlert('Delete failed', e instanceof Error ? e.message : '')
           }
         },
       },
