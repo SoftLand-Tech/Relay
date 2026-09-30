@@ -108,6 +108,23 @@ ${RELEASE_SIGNING_CONFIG_BLOCK}        debug {`
         value: NDK_VERSION,
       });
     }
+    // Release APK size: arm64-v8a is the only ABI real phones need (the
+    // universal APK carried ~59MB of emulator-only x86 libs). Unlike
+    // recipe-meal, android/ is committed here so no prebuild runs on EAS —
+    // the value must live in the committed gradle.properties, not be gated
+    // on EAS_BUILD_PROFILE. Emulator dev builds: pass
+    // -PreactNativeArchitectures=x86_64 to gradle.
+    if (!cfg.modResults.some((item) => item.key === "reactNativeArchitectures")) {
+      cfg.modResults.push({
+        type: "property",
+        key: "reactNativeArchitectures",
+        value: "arm64-v8a",
+      });
+    } else {
+      for (const item of cfg.modResults) {
+        if (item.key === "reactNativeArchitectures") item.value = "arm64-v8a";
+      }
+    }
     return cfg;
   });
 

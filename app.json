@@ -44,7 +44,6 @@
     "plugins": [
       "expo-router",
       "./plugins/with-android-release.js",
-      "./plugins/arm64-only.js",
       [
         "expo-build-properties",
         {
