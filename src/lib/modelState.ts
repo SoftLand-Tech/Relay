@@ -308,6 +308,109 @@ export async function saveProviderKey(slug: string, apiKey: string, sessionId?: 
   return res?.provider
 }
 
+/** Remove every credential (env keys AND OAuth/pool state) for a provider. */
+export async function disconnectProvider(slug: string): Promise<void> {
+  const { rpc } = await gw()
+  await rpc('model.disconnect', { slug })
+  invalidateModelOptions()
+}
+
+// ── Reasoning preferences (thinking level / on-off) ────────────────────────
+
+/**
+ * The gateway's /reasoning vocabulary (hermes_constants parse_reasoning_effort;
+ * 'none' means thinking disabled). Must stay a subset of what `config.set
+ * reasoning` accepts or the gateway answers 4002.
+ */
+export const REASONING_EFFORTS = ['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max', 'ultra'] as const
+export type ReasoningEffort = (typeof REASONING_EFFORTS)[number]
+
+export interface ReasoningPrefs {
+  /** What the live chat uses right now (session override, else the saved default). */
+  effective: string
+  /** Profile-wide default persisted in the server's config.yaml ('' if unknown). */
+  global: string
+  /** Whether thinking blocks render — global display config, already persistent. */
+  display: 'show' | 'hide'
+}
+
+/**
+ * Read both reasoning layers in one go: the saved default (config.get without a
+ * session reads config.yaml) and the session-effective value. Both calls are
+ * cheap reads; failures degrade to '' rather than throwing so the Models
+ * screen renders whatever it could learn.
+ */
+export async function fetchReasoningPrefs(sessionId?: string | null): Promise<ReasoningPrefs> {
+  const { rpc } = await gw()
+  const read = async (sid?: string | null) => {
+    try {
+      return await rpc<{ value?: string; display?: string }>('config.get', {
+        key: 'reasoning',
+        ...(sid ? { session_id: sid } : {}),
+      })
+    } catch (err) {
+      log('warn', 'model', `config.get reasoning failed: ${String(err)}`)
+      return null
+    }
+  }
+  const [eff, glb] = await Promise.all([sessionId ? read(sessionId) : null, read(null)])
+  const display = glb?.display === 'hide' || eff?.display === 'hide' ? 'hide' : 'show'
+  liveReasoningDisplay.set(display)
+  const effective = typeof eff?.value === 'string' && eff.value ? eff.value : ''
+  if (effective) liveReasoning.set(effective)
+  return {
+    effective,
+    global: typeof glb?.value === 'string' && glb.value ? glb.value : '',
+    display,
+  }
+}
+
+/** Where a reasoning pick lands — mirrors `scope` on ConfigSetParams (yolo/reasoning). */
+export type ReasoningScope = 'session' | 'global'
+
+/**
+ * Apply a thinking level. `global` persists it as the profile default in
+ * config.yaml (and updates the live session so it takes effect now); `session`
+ * pins only this conversation. 'none' turns thinking off in either scope.
+ */
+export async function applyReasoning(params: {
+  value: ReasoningEffort
+  scope: ReasoningScope
+  sessionId?: string | null
+}): Promise<{ value: string }> {
+  const { rpc } = await gw()
+  const res = await rpc<{ key: string; value?: string | null }>('config.set', {
+    key: 'reasoning',
+    value: params.value,
+    ...(params.scope === 'global' ? { scope: 'global' } : {}),
+    ...(params.sessionId ? { session_id: params.sessionId } : {}),
+  })
+  const value = typeof res?.value === 'string' && res.value ? res.value : params.value
+  liveReasoning.set(value)
+  return { value }
+}
+
+// ── Profile default model ──────────────────────────────────────────────────
+
+/**
+ * The server's saved startup model/provider (config.yaml) — what "Everywhere"
+ * picks change. Distinguishes the default from the session's live model, which
+ * may carry a session/once-scoped override.
+ */
+export async function fetchDefaultModel(): Promise<{ model: string; provider: string }> {
+  try {
+    const { rpc } = await gw()
+    const r = await rpc<{ model?: string; provider?: string }>('config.get', { key: 'provider' })
+    return {
+      model: typeof r?.model === 'string' ? r.model : '',
+      provider: typeof r?.provider === 'string' ? r.provider : '',
+    }
+  } catch (err) {
+    log('warn', 'model', `config.get provider failed: ${String(err)}`)
+    return { model: '', provider: '' }
+  }
+}
+
 // ── Sorting helpers for the picker ──────────────────────────────────────────
 
 /** Providers ordered for the picker: current, then configured, then the rest. */

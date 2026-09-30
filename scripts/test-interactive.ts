@@ -15,8 +15,9 @@
 import ws from 'ws'
 import {
   buildModelValue, scopeFlag, interpretModelSwitch, rankProviders, rankModels,
-  applyModel, fetchModelOptions, saveProviderKey,
-  liveModel, liveProvider, modelOptions,
+  applyModel, fetchModelOptions, saveProviderKey, disconnectProvider,
+  fetchReasoningPrefs, applyReasoning, fetchDefaultModel, REASONING_EFFORTS,
+  liveModel, liveProvider, liveReasoning, liveReasoningDisplay, modelOptions,
   _useGatewayForTests,
 } from '../src/lib/modelState'
 import { interactiveTarget, argumentModeFor, subsFor, describeCommand, commandCatalog, commandSubcommands, resetCatalog } from '../src/lib/slash'
@@ -48,8 +49,10 @@ interface WireFrame {
 /** Frames the fake gateway received, by method — asserted after each step. */
 async function withFakeGateway<T>(handlers: {
   'config.set'?: (params: Record<string, unknown>) => unknown
+  'config.get'?: (params: Record<string, unknown>) => unknown
   'model.options'?: (params: Record<string, unknown>) => unknown
   'model.save_key'?: (params: Record<string, unknown>) => unknown
+  'model.disconnect'?: (params: Record<string, unknown>) => unknown
 }, fn: (sent: Array<{ method: string; params: Record<string, unknown> }>, url: string) => Promise<T>): Promise<T> {
   const wss = new WebSocketServerImpl({ port: 0, host: '127.0.0.1' })
   await new Promise<void>((r) => wss.once('listening', () => r()))
@@ -232,10 +235,83 @@ async function testModelWireFlow() {
   })
 }
 
+async function testPreferenceFlow() {
+  console.log('\n— wire: thinking prefs + provider management —')
+  liveReasoning.set('')
+  liveReasoningDisplay.set('show')
+  modelOptions.set(null)
+
+  await withFakeGateway({
+    'model.options': () => ({ providers: [{ slug: 'zai', name: 'Z.ai', authenticated: true, is_current: true, models: ['m1'] }], model: 'm1', provider: 'zai' }),
+    'config.get': (p) => {
+      if (p.key === 'reasoning') {
+        // session read answers the effective value; the no-session read the saved default
+        return 'session_id' in p ? { value: 'low', display: 'show' } : { value: 'high', display: 'show' }
+      }
+      if (p.key === 'provider') return { model: 'glm-4.7', provider: 'zai', providers: [] }
+      return {}
+    },
+    'config.set': (p) => ({ key: p.key, value: p.value }),
+    'model.disconnect': () => ({ slug: 'bogus', disconnected: true }),
+  }, async (sent) => {
+    // Vocabulary mirrors the gateway's parse_reasoning_effort ('none' = off)
+    check('efforts list matches gateway vocabulary',
+      JSON.stringify(REASONING_EFFORTS) === JSON.stringify(['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max', 'ultra']),
+      REASONING_EFFORTS.join(','))
+
+    // 1. Preference read: both layers in one call, display rides the global read
+    const prefs = await fetchReasoningPrefs('live-1')
+    check('prefs separate session value from saved default',
+      prefs.effective === 'low' && prefs.global === 'high' && prefs.display === 'show',
+      JSON.stringify(prefs))
+    check('prefs feed the live atoms', liveReasoning.get() === 'low' && liveReasoningDisplay.get() === 'show')
+    const getFrames = sent.filter((f) => f.method === 'config.get' && f.params.key === 'reasoning')
+    check('config.get reasoning asked twice', getFrames.length === 2)
+    check('session read carries session_id, default read does not',
+      getFrames.some((f) => f.params.session_id === 'live-1') && getFrames.some((f) => !('session_id' in f.params)))
+
+    // 2. Session-scoped effort: NO scope key (params are extra="forbid" upstream)
+    sent.length = 0
+    await applyReasoning({ value: 'low', scope: 'session', sessionId: 'live-1' })
+    check('session effort frame shape', (() => {
+      const p = sent[0]?.params
+      return sent[0]?.method === 'config.set' && p?.key === 'reasoning' && p?.value === 'low'
+        && p?.session_id === 'live-1' && !('scope' in p)
+    })(), JSON.stringify(sent[0]?.params))
+    check('effort write lands in the live atom', liveReasoning.get() === 'low')
+
+    // 3. Global effort: scope='global' is what persists the everywhere default
+    sent.length = 0
+    const r = await applyReasoning({ value: 'none', scope: 'global', sessionId: 'live-1' })
+    check('global effort frame shape', (() => {
+      const p = sent[0]?.params
+      return sent[0]?.method === 'config.set' && p?.key === 'reasoning' && p?.value === 'none'
+        && p?.scope === 'global' && p?.session_id === 'live-1'
+    })(), JSON.stringify(sent[0]?.params))
+    check("'none' (thinking off) echoes back", r.value === 'none')
+
+    // 4. Disconnect: slug only, and it busts the cached inventory
+    await fetchModelOptions('live-1')
+    check('inventory cached before disconnect', modelOptions.get() !== null)
+    await disconnectProvider('zai')
+    const dcFrame = sent.find((f) => f.method === 'model.disconnect')
+    check('disconnect frame shape', !!dcFrame && dcFrame.params.slug === 'zai' && Object.keys(dcFrame.params).length === 1,
+      JSON.stringify(dcFrame?.params))
+    check('disconnect invalidated the cache', modelOptions.get() === null)
+
+    // 5. Default-model read (the "Saved everywhere" line)
+    const def = await fetchDefaultModel()
+    check('default model shape', def.model === 'glm-4.7' && def.provider === 'zai', JSON.stringify(def))
+    const provFrame = sent.find((f) => f.method === 'config.get' && f.params.key === 'provider')
+    check('default-model frame has no session key', !!provFrame && !('session_id' in provFrame.params))
+  })
+}
+
 async function main() {
   await testPureHelpers()
   await testInteractiveTargets()
   await testModelWireFlow()
+  await testPreferenceFlow()
   console.log(`\n${pass} passed, ${fail} failed`)
   process.exit(fail ? 1 : 0)
 }

@@ -4,12 +4,14 @@
  * Backed entirely by the gateway's picker contract: `model.options` for the
  * inventory, `config.set { key: 'model', value: "<model> --provider <slug>
  * <--scope>" }` to apply (see src/lib/modelState.ts), `model.save_key` for
- * providers the gateway knows but that have no key yet.
+ * providers the gateway knows but that have no key yet (ProviderKeyForm).
  */
 import React, { useEffect, useMemo, useRef, useState } from 'react'
-import { Modal, View, Text, Pressable, TextInput, ScrollView, StyleSheet, ActivityIndicator, KeyboardAvoidingView, Platform, Alert } from 'react-native'
+import { Modal, View, Text, Pressable, TextInput, ScrollView, StyleSheet, ActivityIndicator, KeyboardAvoidingView, Platform } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { Icon } from './Icon'
+import { ProviderKeyForm } from './ProviderKeyForm'
+import { showAlert } from './AlertDialog'
 import * as Haptics from 'expo-haptics'
 import { useStore } from '@nanostores/react'
 import {
@@ -24,7 +26,9 @@ import { C, useStyles } from '../lib/theme'
 
 type Step = 'provider' | 'model' | 'scope'
 
-export function ModelPickerSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
+export function ModelPickerSheet({
+  open, onClose, initialSlug,
+}: { open: boolean; onClose: () => void; initialSlug?: string | null }) {
   const s = useStyles(makeS)
   const options = useStore(modelOptions)
   const loading = useStore(modelOptionsLoading)
@@ -37,7 +41,6 @@ export function ModelPickerSheet({ open, onClose }: { open: boolean; onClose: ()
   const [model, setModel] = useState('')
   const [applying, setApplying] = useState(false)
   const [keyFor, setKeyFor] = useState<ProviderOption | null>(null)
-  const [ keyValue, setKeyValue] = useState('')
   const [savingKey, setSavingKey] = useState(false)
   /** Set when the open-path refresh fails — surfaced in the sheet, not just the log. */
   const [loadError, setLoadError] = useState('')
@@ -50,6 +53,8 @@ export function ModelPickerSheet({ open, onClose }: { open: boolean; onClose: ()
   // RPC on the open path), while optimistic new-chat/switch windows resolve
   // to a REAL live id so a pending/temp key is never sent as session_id.
   // The apply/save paths ensure a session where one is actually required.
+  // initialSlug (Providers section → "pick a model") skips the provider
+  // list and lands directly on that provider's models when it's usable.
   useEffect(() => {
     if (!open) return
     setStep('provider')
@@ -57,17 +62,22 @@ export function ModelPickerSheet({ open, onClose }: { open: boolean; onClose: ()
     setModel('')
     setQuery('')
     setKeyFor(null)
-    setKeyValue('')
     setLoadError('')
     void (async () => {
       try {
-        await fetchModelOptions(await activeLiveId(), { force: true })
+        const fresh = await fetchModelOptions(await activeLiveId(), { force: true })
+        const preset = initialSlug ? fresh.providers.find((p) => p.slug === initialSlug) : null
+        if (preset?.authenticated) {
+          setProvider(preset)
+          setQuery('')
+          setStep('model')
+        }
       } catch (err) {
         setLoadError(err instanceof Error ? err.message : 'Could not load models')
         log('warn', 'model', `model.options failed: ${String(err)}`)
       }
     })()
-  }, [open])
+  }, [open, initialSlug])
 
   const providers = useMemo(() => rankProviders(options?.providers ?? []), [options])
   const configured = useMemo(() => providers.filter((p) => p.authenticated), [providers])
@@ -93,7 +103,6 @@ export function ModelPickerSheet({ open, onClose }: { open: boolean; onClose: ()
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
     if (!p.authenticated) {
       setKeyFor(p)
-      setKeyValue('')
       return
     }
     setKeyFor(null)
@@ -108,27 +117,30 @@ export function ModelPickerSheet({ open, onClose }: { open: boolean; onClose: ()
     setStep('scope')
   }
 
-  const saveKey = async () => {
-    if (!keyFor || !keyValue.trim()) return
+  /** Connect a provider from the picker; null = connected, string = why not. */
+  const saveKey = async (apiKey: string): Promise<string | null> => {
+    if (!keyFor) return 'No provider selected'
     setSavingKey(true)
     try {
       const sid = await ensureSession()
-      await saveProviderKey(keyFor.slug, keyValue.trim(), sid)
+      await saveProviderKey(keyFor.slug, apiKey, sid)
       const fresh = await fetchModelOptions(sid, { force: true })
       const now = fresh.providers.find((p) => p.slug === keyFor.slug)
-      setSavingKey(false)
       if (now?.authenticated) {
         setKeyFor(null)
-        setKeyValue('')
         setProvider(now)
         setQuery('')
         setStep('model')
       } else {
         setKeyFor(null)
       }
+      return null
     } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      log('warn', 'model', `model.save_key failed: ${msg}`)
+      return msg
+    } finally {
       setSavingKey(false)
-      log('warn', 'model', `model.save_key failed: ${String(err)}`)
     }
   }
 
@@ -143,13 +155,11 @@ export function ModelPickerSheet({ open, onClose }: { open: boolean; onClose: ()
         // wrote nothing yet — ask, then retry with the confirm flag.
         setApplying(false)
         const confirmMessage: string = res.message
-        const go = await new Promise<boolean>((resolve) => {
-          Alert.alert('Confirm switch', confirmMessage, [
-            { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
-            { text: 'Use it', style: 'default', onPress: () => resolve(true) },
-          ])
-        })
-        if (!go) return
+        const pick = await showAlert('Confirm switch', confirmMessage, [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Use it', style: 'default' },
+        ])
+        if (pick.text !== 'Use it') return
         setApplying(true)
         res = await applyModel({ sessionId: sid, model, provider: provider.slug, scope, confirmed: true })
       }
@@ -272,37 +282,8 @@ export function ModelPickerSheet({ open, onClose }: { open: boolean; onClose: ()
               <View style={{ height: 24 }} />
             </ScrollView>
           ) : keyFor ? (
-            <View style={s.keyWrap}>
-              <Text style={s.keyTitle}>{keyFor.name} needs an API key</Text>
-              <Text style={s.keyHint}>{keyFor.key_env ? `Stored server-side as ${keyFor.key_env}.` : 'Stored server-side by your gateway.'}</Text>
-              <TextInput
-                style={s.keyInput}
-                value={keyValue}
-                onChangeText={setKeyValue}
-                placeholder="Paste API key…"
-                placeholderTextColor={C.textFaint}
-                autoCapitalize="none"
-                autoCorrect={false}
-                secureTextEntry
-                accessibilityLabel="API key"
-              />
-              <View style={s.keyRow}>
-                <Pressable
-                  style={({ pressed }) => [s.keyBtn, s.keyCancel, pressed && s.iconPressed]}
-                  onPress={() => setKeyFor(null)}
-                  accessibilityLabel="Cancel key"
-                >
-                  <Text style={s.keyCancelText}>Cancel</Text>
-                </Pressable>
-                <Pressable
-                  style={[s.keyBtn, s.keySave, (!keyValue.trim() || savingKey) && s.keySaveOff]}
-                  onPress={() => { void saveKey() }}
-                  disabled={!keyValue.trim() || savingKey}
-                  accessibilityLabel="Save key"
-                >
-                  {savingKey ? <ActivityIndicator size="small" color={C.onAccent} /> : <Text style={s.keySaveText}>Save & continue</Text>}
-                </Pressable>
-              </View>
+            <View style={{ paddingBottom: 8 }}>
+              <ProviderKeyForm provider={keyFor} busy={savingKey} onSave={saveKey} onCancel={() => setKeyFor(null)} />
             </View>
           ) : null}
 
@@ -467,20 +448,6 @@ const makeS = () => StyleSheet.create({
   providerWarning: { color: C.amber, fontSize: 11.5, lineHeight: 16, paddingHorizontal: 12, paddingBottom: 6 },
   loadWarning: { color: C.amber, fontSize: 11.5, lineHeight: 16, paddingHorizontal: 14, paddingBottom: 6 },
   empty: { color: C.textFaint, fontSize: 13, textAlign: 'center', padding: 24 },
-  keyWrap: { padding: 16, gap: 8 },
-  keyTitle: { color: C.text, fontSize: 15, fontWeight: '700' },
-  keyHint: { color: C.textFaint, fontSize: 12 },
-  keyInput: {
-    backgroundColor: C.bgCard, borderRadius: 12, borderWidth: 1, borderColor: C.border,
-    color: C.text, paddingHorizontal: 12, paddingVertical: 11, minHeight: 46, fontSize: 14,
-  },
-  keyRow: { flexDirection: 'row', gap: 8, marginTop: 4 },
-  keyBtn: { flex: 1, borderRadius: 22, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
-  keyCancel: { backgroundColor: C.bgCard },
-  keyCancelText: { color: C.textDim, fontWeight: '700', fontSize: 13.5 },
-  keySave: { backgroundColor: C.accent },
-  keySaveOff: { opacity: 0.5 },
-  keySaveText: { color: C.onAccent, fontWeight: '800', fontSize: 13.5 },
   scopeWrap: { paddingHorizontal: 14, paddingBottom: 6, gap: 8 },
   scopeLead: { color: C.textDim, fontSize: 13, marginBottom: 2 },
   scopeModel: { color: C.text, fontWeight: '700' },

@@ -177,6 +177,51 @@ async function main() {
     check('config.get rejects the old key (regression guard)', true, `code ${(e as { code?: number }).code}`)
   }
 
+  // ── thinking preferences: session pin vs saved-everywhere default ──────
+  const EFFORTS = ['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max', 'ultra']
+  if (sidA) {
+    try {
+      await client.request('config.set', { key: 'reasoning', value: 'low', session_id: sidA })
+      const r = await client.request<{ value?: string }>('config.get', { key: 'reasoning', session_id: sidA })
+      check('session-scoped effort pins the session', r.value === 'low', `value=${r.value}`)
+    } catch (e) {
+      check('session-scoped effort pins the session', false, (e as Error).message)
+    }
+    try {
+      // Same-value write-back proves the scope:'global' frame is accepted
+      // without touching the user's saved default.
+      const g = await client.request<{ value?: string }>('config.get', { key: 'reasoning' })
+      if (typeof g.value === 'string' && EFFORTS.includes(g.value)) {
+        await client.request('config.set', { key: 'reasoning', value: g.value, scope: 'global', session_id: sidA })
+        const after = await client.request<{ value?: string }>('config.get', { key: 'reasoning' })
+        check('global effort frame accepted, default unchanged', after.value === g.value, `${g.value} -> ${after.value}`)
+      } else {
+        check('global effort frame accepted, default unchanged', true, `skipped write-back (current: ${g.value})`)
+      }
+    } catch (e) {
+      check('global effort frame accepted, default unchanged', false, (e as Error).message)
+    }
+  }
+
+  // ── provider inventory + disconnect wiring (Models screen) ─────────────
+  try {
+    const r = await client.request<{ providers?: Array<Record<string, unknown>> }>('model.options', {
+      include_unconfigured: true,
+    })
+    const rows = r.providers ?? []
+    const withStatus = rows.filter((p) => typeof p.authenticated === 'boolean').length
+    const connectable = rows.filter((p) => p.authenticated === false && p.auth_type === 'api_key').length
+    check('model.options include_unconfigured rows carry status', withStatus > 0, `${withStatus}/${rows.length} rows, ${connectable} connectable`)
+  } catch (e) {
+    check('model.options include_unconfigured rows carry status', false, (e as Error).message)
+  }
+  try {
+    await client.request('model.disconnect', { slug: 'no-such-provider-xyz' })
+    check('model.disconnect unknown slug refuses (4005)', false, 'accepted')
+  } catch (e) {
+    check('model.disconnect unknown slug refuses (4005)', (e as { code?: number }).code === 4005, `code ${(e as { code?: number }).code}`)
+  }
+
   // ── replay: session.events.since + per-session seq watermarks ──────────
   if (sidA) {
     try {
