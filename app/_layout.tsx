@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { Stack, router } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
+import { KeyboardProvider } from 'react-native-keyboard-controller'
 import { View, Text, Pressable, StyleSheet, AppState, Modal } from 'react-native'
 import { useStore } from '@nanostores/react'
 import * as Linking from 'expo-linking'
@@ -151,7 +152,7 @@ export default function RootLayout() {
   const connecting = !online && state === 'connecting'
 
   return (
-    <>
+    <KeyboardProvider>
     <View style={{ flex: 1, backgroundColor: C.bg }}>
       <StatusBar style="light" />
       <Stack
@@ -246,7 +247,7 @@ export default function RootLayout() {
       <SessionToasts />
     </View>
     {splash}
-    </>
+    </KeyboardProvider>
   )
 }
 

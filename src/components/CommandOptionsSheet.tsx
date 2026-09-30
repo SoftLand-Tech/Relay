@@ -6,7 +6,8 @@
  * Mixed commands also take free text (e.g. `/queue add <prompt>`).
  */
 import React, { useEffect, useMemo, useRef, useState } from 'react'
-import { Modal, View, Text, Pressable, TextInput, ScrollView, StyleSheet, KeyboardAvoidingView, Platform, ActivityIndicator } from 'react-native'
+import { Modal, View, Text, Pressable, TextInput, ScrollView, StyleSheet, Platform, ActivityIndicator } from 'react-native'
+import { KeyboardAvoidingView } from 'react-native-keyboard-controller'
 import { Ionicons } from '@expo/vector-icons'
 import { Icon } from './Icon'
 import * as Haptics from 'expo-haptics'
