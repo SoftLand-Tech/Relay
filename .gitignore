@@ -39,7 +39,6 @@ yarn-error.*
 
 # generated native folders
 /ios
-/android
 
 # local agent tooling state
 .video_agent/
@@ -50,3 +49,6 @@ videos/
 # local capture/verification output — contains paired-session screenshots and
 # capture scripts holding a dev gateway pairing token; never commit
 out/
+
+# EAS signing credentials — never commit
+credentials.json

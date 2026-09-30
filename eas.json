@@ -13,8 +13,11 @@
       "channel": "preview"
     },
     "production": {
-      "autoIncrement": true,
-      "channel": "production"
+      "autoIncrement": false,
+      "channel": "production",
+      "android": {
+        "buildType": "apk"
+      }
     }
   },
   "submit": {

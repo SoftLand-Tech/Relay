@@ -43,6 +43,7 @@
     },
     "plugins": [
       "expo-router",
+      "./plugins/with-android-release.js",
       [
         "expo-splash-screen",
         {
@@ -94,7 +95,10 @@
       "policy": "appVersion"
     },
     "updates": {
-      "url": "https://u.expo.dev/038818db-3744-42ab-9bf0-4426c1895084"
+      "url": "https://u.expo.dev/038818db-3744-42ab-9bf0-4426c1895084",
+      "requestHeaders": {
+        "expo-channel-name": "production"
+      }
     }
   }
 }
