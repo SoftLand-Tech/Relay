@@ -63,6 +63,13 @@ subprojects { sp ->
 `;
 
 const withAndroidRelease = (config) => {
+  // Bare workflow builds reject runtimeVersion policies; resolve the
+  // appVersion policy to the literal version so OTA runtime tracking stays
+  // version-bound while satisfying EAS.
+  if (config.runtimeVersion && typeof config.runtimeVersion === "object") {
+    config.runtimeVersion = config.version;
+  }
+
   config = withAppBuildGradle(config, (cfg) => {
     let contents = cfg.modResults.contents;
     if (!contents.includes("keystorePropertiesFile")) {
