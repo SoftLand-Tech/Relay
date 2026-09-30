@@ -1,12 +1,34 @@
-import React, { useCallback, useMemo, useState } from 'react'
-import { View, Text, Pressable, StyleSheet } from 'react-native'
+import React, { useCallback, useMemo, useRef, useState } from 'react'
+import {
+  View,
+  Text,
+  Pressable,
+  StyleSheet,
+  Animated,
+  PanResponder,
+  useWindowDimensions,
+} from 'react-native'
+import type { GestureResponderEvent, PanResponderGestureState } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { Icon } from './Icon'
 import { useRouter } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useStore } from '@nanostores/react'
-import { Sidebar, type NavItem, type RecentChat } from './Sidebar'
+import {
+  Sidebar,
+  captureProgress,
+  clamp01,
+  drawerPanelWidth,
+  settleTo,
+  EDGE_CLAIM,
+  DOMINANCE,
+  FLICK,
+  CANCEL_MS,
+  type NavItem,
+  type RecentChat,
+} from './Sidebar'
 import { C, S, useStyles, useShape } from '../lib/theme'
+import { runningAutomationCount, refreshRunningAutomations } from '../lib/automationsState'
 import { attentionById, rowStatus } from '../lib/attention'
 import { isConnected as isConnectedAtom, rpc } from '../lib/gateway'
 import {
@@ -56,17 +78,76 @@ export function ScreenShell({
   const all = useStore(sessionsById)
   const rows = useStore(sessionRows)
 
+  // ── Swipe anywhere to open the drawer ────────────────────────────────────
+  // The drawer's progress (0 closed → 1 open) lives here so this gesture and
+  // the Sidebar's own edge-strip/panel drags drive one Animated.Value. The
+  // catch strip inside Sidebar stays 28dp on purpose (a wider box-only strip
+  // would swallow chat taps), so the OPEN drag is claimed here on the screen
+  // root instead: non-capture, so descendant scrollables keep their gestures
+  // (the vertical transcript, horizontal chip strips — they're asked first),
+  // and a horizontal-dominant rightward drag anywhere else finger-tracks the
+  // panel. Starting mid-screen also sidesteps the Android back-gesture edge
+  // zone. The panel follows 1:1 and settles by distance + flick velocity.
+  const { width } = useWindowDimensions()
+  const drawerAnim = useRef(new Animated.Value(0)).current
+  const panelWidth = drawerPanelWidth(width)
+  const panelWidthRef = useRef(panelWidth)
+  panelWidthRef.current = panelWidth
+  const openRef = useRef(open)
+  openRef.current = open
+  const dragProgress = useRef(0)
+  const moveSeen = useRef(false)
+  // Flips on the first touch anywhere (see the capture observer below) so the
+  // drawer's panel subtree is already mounted — and paid for — before a drag
+  // starts moving it.
+  const [primed, setPrimed] = useState(false)
+  const openPan = useMemo(() => {
+    const settle = (_e: GestureResponderEvent, g: PanResponderGestureState) => {
+      // Fixed-duration legs on both outcomes: the release glide is the SAME
+      // animation as the hamburger open (and its close counterpart), just
+      // starting from wherever the drag stopped — one consistent motion.
+      if (g.vx > FLICK || dragProgress.current > 0.5) setOpen(true)
+      else settleTo(drawerAnim, 0, CANCEL_MS)
+    }
+    return PanResponder.create({
+      // Capture-phase touch-DOWN observer that never claims (returns false):
+      // its only job is priming. Mounting the drawer at touch-down means the
+      // SectionList mount cost lands while nothing is animating — mounting it
+      // mid-drag froze the first swipe (a visible "cut off, then continue").
+      onStartShouldSetPanResponderCapture: () => {
+        setPrimed(true)
+        return false
+      },
+      onStartShouldSetPanResponder: () => false,
+      onMoveShouldSetPanResponder: (_e, g) =>
+        !openRef.current && g.dx > EDGE_CLAIM && g.dx > Math.abs(g.dy) * DOMINANCE,
+      onPanResponderGrant: () => captureProgress(drawerAnim, dragProgress, moveSeen),
+      onPanResponderMove: (_e, g) => {
+        const p = clamp01(g.dx / panelWidthRef.current)
+        dragProgress.current = p
+        moveSeen.current = true
+        drawerAnim.setValue(p)
+      },
+      onPanResponderRelease: settle,
+      onPanResponderTerminate: settle,
+    })
+  }, [drawerAnim])
+
   // The drawer's chat list comes from the gateway, so it has to be fetched.
   React.useEffect(() => {
     if (!online) return
     void loadSessions()
+    void refreshRunningAutomations()
     // Refresh whenever the connection comes back.
   }, [online])
 
   // Keep it fresh: a new message lands, a title gets set.
   React.useEffect(() => {
     const id = setInterval(() => {
-      if (online) void loadSessions()
+      if (online) {
+        void loadSessions()
+        void refreshRunningAutomations()
+      }
     }, 60_000)
     return () => clearInterval(id)
   }, [online])
@@ -80,13 +161,15 @@ export function ScreenShell({
     void loadChatMarks()
   }, [])
 
+  const runningAuto = useStore(runningAutomationCount)
+
   const nav = useMemo<NavItem[]>(() => [
     { key: 'chat', label: 'Chat', icon: 'chatbubble-outline' },
-    { key: 'automations', label: 'Automations', icon: 'timer-outline' },
+    { key: 'automations', label: 'Automations', icon: 'timer-outline', mochis: runningAuto },
     { key: 'skills', label: 'Skills', icon: 'sparkles-outline' },
     { key: 'agent', label: 'Models', icon: 'cube-outline' },
     { key: 'settings', label: 'Settings', icon: 'settings-outline' },
-  ], [])
+  ], [runningAuto])
 
   const recent = useMemo<RecentChat[]>(() => {
     // The server list is the source of truth: it covers every stored
@@ -216,7 +299,7 @@ export function ScreenShell({
   }, [liveIdOf])
 
   return (
-    <View style={s.root}>
+    <View style={s.root} {...openPan.panHandlers}>
       {S.trayHeader ? (
         // Mocheme tray — one row: the title floats dead-center (absolutely
         // positioned, inset by the measured controls width so it can never
@@ -307,6 +390,8 @@ export function ScreenShell({
 
       <Sidebar
         open={open}
+        progress={drawerAnim}
+        primed={primed}
         onOpen={() => {
           // Always re-read on open: the list is cheap, and it means a chat
           // created on another surface (or by a cron job) shows up without

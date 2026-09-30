@@ -29,6 +29,8 @@ export interface NavItem {
   label: string
   icon: keyof typeof Ionicons.glyphMap
   badge?: number
+  /** Active automations: renders up to 3 mini Mochis, +N past that. */
+  mochis?: number
 }
 
 export interface RecentChat {
@@ -52,6 +54,18 @@ interface Props {
   open: boolean
   onClose: () => void
   onOpen?: () => void
+  /**
+   * The shared 0→1 drawer progress, owned by ScreenShell so its
+   * swipe-anywhere open gesture and this component's own edge/panel gestures
+   * all drive one value.
+   */
+  progress: Animated.Value
+  /**
+   * True once the owner has seen any touch: mounts the panel subtree BEFORE
+   * the first drag claims it, so the mount cost never freezes a moving drawer
+   * (a mid-drag mount reads as the panel "cutting out" then catching up).
+   */
+  primed?: boolean
   /**
    * Ask the owner of `open` to open the drawer — fired by the edge-swipe
    * gesture. The gesture animates only the cancel cases; every release that
@@ -117,6 +131,8 @@ function usePopFade(visible: boolean, inMs = 150, outMs = 130) {
 }
 
 // ── Drawer swipe tuning (A2-21) ──────────────────────────────────────────────
+// Shared with ScreenShell, whose swipe-anywhere open gesture drives the same
+// progress value and reuses the same claim/threshold language.
 // EDGE_W: width of the left-edge catch strip while closed. Kept at 28 with no
 // hitSlop — taps starting inside the strip are swallowed (RN has no touch
 // re-dispatch), so the strip stays narrow AND starts below the top bar
@@ -126,22 +142,33 @@ const EDGE_W = 28
 // circle + paddingBottom 8); 56 leaves a little slack under it.
 const EDGE_TOP_GAP = 56
 // px of horizontal travel before a drag claims the pan.
-const EDGE_CLAIM = 10
+export const EDGE_CLAIM = 10
 // |dx| must beat |dy| by this factor, so vertical list scrolls and taps win.
-const DOMINANCE = 1.5
+export const DOMINANCE = 1.5
 // px/ms — the unit of gestureState.vx (dt is in ms timestamps).
-const FLICK = 0.25
-const OPEN_MS = 190
-const CLOSE_MS = 150
+export const FLICK = 0.25
+export const OPEN_MS = 190
+export const CLOSE_MS = 150
 // Release below threshold while still closed → spring back.
-const CANCEL_MS = 150
+export const CANCEL_MS = 150
 // Release above threshold while still open → snap back open.
 const SNAP_MS = 180
 
-const clamp01 = (v: number) => (v < 0 ? 0 : v > 1 ? 1 : v)
+export const clamp01 = (v: number) => (v < 0 ? 0 : v > 1 ? 1 : v)
+
+/** ChatGPT's panel is ~300dp, capped so it never looks empty on a tablet. */
+export const drawerPanelWidth = (windowWidth: number) => Math.min(windowWidth * 0.82, 320)
 
 /** SectionList keyExtractor hoisted to module scope for identity stability. */
 const chatKey = (c: RecentChat) => c.id
+
+/** The real Mochi design (mochi-svgs/mochi.svg) rasterized static, one per
+    running-automation slot, in the app's three signal colors. */
+const MOCHI_RUN = [
+  require('../../assets/mochi-run-1.png'),
+  require('../../assets/mochi-run-2.png'),
+  require('../../assets/mochi-run-3.png'),
+]
 
 /**
  * Shared grant step for both pan responders: freeze any running settle and
@@ -150,7 +177,7 @@ const chatKey = (c: RecentChat) => c.id
  * so `moveSeenRef` guards against a late callback clobbering progress the
  * finger has already moved past.
  */
-function captureProgress(
+export function captureProgress(
   anim: Animated.Value,
   progressRef: { current: number },
   moveSeenRef: { current: boolean },
@@ -167,7 +194,7 @@ function captureProgress(
  * drawer state go through onRequestOpen()/onClose() so the open/close layout
  * effect owns the final leg (prop-flip contract).
  */
-function settleTo(anim: Animated.Value, toValue: 0 | 1, duration: number) {
+export function settleTo(anim: Animated.Value, toValue: 0 | 1, duration: number) {
   Animated.timing(anim, { toValue, duration, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start()
 }
 
@@ -191,6 +218,8 @@ export function Sidebar({
   open,
   onClose,
   onOpen,
+  progress,
+  primed,
   onRequestOpen,
   nav,
   recent,
@@ -209,19 +238,29 @@ export function Sidebar({
   const activeKey = nav.find((n) => pathname?.endsWith(n.key))?.key
   const { width, height } = useWindowDimensions()
   const insets = useSafeAreaInsets()
-  const anim = useRef(new Animated.Value(0)).current
+  const anim = progress
   // Mount-on-first-open (A2-16, as revised for the web tab-order review): the
   // panel/dialog subtree renders on the first open and stays mounted forever
   // after — only the edge strip exists before that. Zero mount cost on every
   // subsequent open, and no invisible control is tabbable pre-first-use.
   const [everOpened, setEverOpened] = useState(false)
+  // Fallback everOpened flip: if a drag ever moves progress before the
+  // owner's touch-down priming lands, the panel still mounts — a
+  // finger-tracking drag must be VISIBLE.
+  useEffect(() => {
+    const id = anim.addListener(({ value }) => {
+      if (value > 0.01) setEverOpened(true)
+    })
+    return () => anim.removeListener(id)
+  }, [anim])
   // Web only: after the close animation finishes, the panel subtree gets
   // display:'none' — RNW keeps role=button elements tabbable regardless of
   // pointerEvents/aria-hidden, and display:none is the only thing browsers
   // reliably drop from the tab order (it also blurs anything focused inside).
   const [dormant, setDormant] = useState(false)
-  // ChatGPT's panel is ~300dp, capped so it never looks empty on a tablet.
-  const panelWidth = Math.min(width * 0.82, 320)
+  // ChatGPT's panel width — shared with the owner's swipe gesture via the
+  // exported helper so both map finger pixels to the same 0→1 progress.
+  const panelWidth = drawerPanelWidth(width)
   const [query, setQuery] = useState('')
   const [archOpen, setArchOpen] = useState(false)
 
@@ -302,6 +341,11 @@ export function Sidebar({
     if (open) {
       setDormant(false)
       setQuery('')
+      // Fixed-duration leg, identical to the hamburger-open animation,
+      // starting wherever the drag released: one consistent glide the user
+      // already knows. (Scaling the duration by remaining distance made the
+      // release speed depend on the release point — a fast whip from mid-drag
+      // that reads as a jump, not a continuation.)
       Animated.timing(anim, { toValue: 1, duration: OPEN_MS, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start()
       // A2-20: refresh when the drawer OPENS (ScreenShell's "always re-read
       // on open" intent). This used to fire in the close branch, where a
@@ -544,8 +588,10 @@ export function Sidebar({
   const dormantStyle: ViewStyle | undefined = dormant ? { display: 'none' } : undefined
 
   // Mount-on-first-open gate: flips during render (React re-runs the component
-  // before committing), so the subtree mounts in the same commit as open=true.
-  if (open && !everOpened) setEverOpened(true)
+  // before committing), so the subtree mounts in the same commit as open=true
+  // — or as the owner's first touch (primed), which pre-pays the mount so a
+  // drag never freezes mid-swipe while the panel mounts.
+  if ((open || primed) && !everOpened) setEverOpened(true)
 
   if (!everOpened) {
     // First run: only the edge strip is mounted — nothing under the closed
@@ -639,6 +685,17 @@ export function Sidebar({
                 color={item.key === activeKey && S.drawerRoundedCap ? C.accent : C.text}
               />
               <Text style={s.navLabel}>{item.label}</Text>
+              {item.mochis ? (
+                <View
+                  style={s.mochiRunRow}
+                  accessibilityLabel={`${item.mochis} running automation${item.mochis === 1 ? '' : 's'}`}
+                >
+                  {Array.from({ length: Math.min(item.mochis, 3) }).map((_, i) => (
+                    <Image key={i} source={MOCHI_RUN[i]} style={[s.mochiMini, i > 0 && s.mochiMiniOverlap]} />
+                  ))}
+                  {item.mochis > 3 ? <Text style={s.mochiMore}>+{item.mochis - 3}</Text> : null}
+                </View>
+              ) : null}
               {item.badge ? (
                 <View style={s.badge}>
                   <Text style={s.badgeText}>{item.badge > 9 ? '9+' : item.badge}</Text>
@@ -957,7 +1014,7 @@ const makeS = () => StyleSheet.create({
   },
   brand: { color: C.text, fontSize: 17, fontWeight: '700', letterSpacing: 0.2 },
   brandRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  brandLogo: { width: 24, height: 18, resizeMode: 'contain' },
+  brandLogo: { width: 34, height: 26, resizeMode: 'contain' },
   iconBtn: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center' },
   iconBtnPressed: { opacity: 0.5 },
   clearBtn: { width: 26, height: 26, alignItems: 'center', justifyContent: 'center' },
@@ -985,6 +1042,12 @@ const makeS = () => StyleSheet.create({
     justifyContent: 'center',
   },
   badgeText: { color: '#fff', fontSize: 11, fontWeight: '800' },
+  // Mini Mochi run-counter next to "Automations": up to three overlapping
+  // faces, then a +N suffix.
+  mochiRunRow: { flexDirection: 'row', alignItems: 'center' },
+  mochiMini: { width: 32, height: 32, resizeMode: 'contain' },
+  mochiMiniOverlap: { marginLeft: -10 },
+  mochiMore: { color: C.textFaint, fontSize: 12.5, fontWeight: '800', marginLeft: 3 },
   searchWrap: {
     flexDirection: 'row',
     alignItems: 'center',

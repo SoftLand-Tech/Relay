@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react'
-import { View, Text, ScrollView, StyleSheet, Pressable, RefreshControl, ActivityIndicator, Modal, TextInput, Alert, Platform } from 'react-native'
+import { View, Text, ScrollView, StyleSheet, Pressable, RefreshControl, ActivityIndicator, Modal, TextInput, Platform } from 'react-native'
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller'
 import { Ionicons } from '@expo/vector-icons'
 import { Icon } from '../../src/components/Icon'
@@ -8,7 +8,9 @@ import { useStore } from '@nanostores/react'
 import * as Clipboard from 'expo-clipboard'
 import { rpc, isConnected as isConnectedAtom } from '../../src/lib/gateway'
 import { ensureSession } from '../../src/lib/chat'
+import { runningAutomationCount, countRunningJobs } from '../../src/lib/automationsState'
 import { ScreenShell } from '../../src/components/ScreenShell'
+import { showAlert } from '../../src/components/AlertDialog'
 import { C, useStyles } from '../../src/lib/theme'
 
 interface Job {
@@ -85,6 +87,9 @@ export default function Automations() {
       // would lose the job it just paused (and could never resume it).
       const res = await rpc<{ jobs?: Job[] }>('cron.manage', { action: 'list', include_disabled: true })
       setJobs(res?.jobs ?? [])
+      // The sidebar's mini-Mochi row mirrors every load here, so pause /
+      // resume / remove / add update it instantly.
+      runningAutomationCount.set(countRunningJobs(res?.jobs ?? []))
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not load automations')
     } finally {
@@ -117,7 +122,7 @@ export default function Automations() {
     try {
       await fn()
     } catch (e) {
-      Alert.alert('Action failed', e instanceof Error ? e.message : String(e))
+      showAlert('Action failed', e instanceof Error ? e.message : String(e))
     } finally {
       setBusyJob(null)
     }
@@ -138,7 +143,7 @@ export default function Automations() {
     })
 
   const remove = (j: Job) =>
-    Alert.alert('Delete this automation?', j.name ?? j.job_id, [
+    showAlert('Delete this automation?', j.name ?? j.job_id, [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Delete',
@@ -158,7 +163,7 @@ export default function Automations() {
     const prompt = form.prompt.trim()
     const name = form.name.trim()
     if (!schedule || !prompt || (!form.jobId && !name)) {
-      Alert.alert('Missing fields', 'Name, schedule and prompt are all needed.')
+      showAlert('Missing fields', 'Name, schedule and prompt are all needed.')
       return
     }
     setForm({ ...form, saving: true })
@@ -174,7 +179,7 @@ export default function Automations() {
       setForm(null)
       await load()
     } catch (e) {
-      Alert.alert(form.jobId ? 'Edit failed' : 'Create failed', e instanceof Error ? e.message : String(e))
+      showAlert(form.jobId ? 'Edit failed' : 'Create failed', e instanceof Error ? e.message : String(e))
       setForm({ ...form, saving: false })
     }
   }
