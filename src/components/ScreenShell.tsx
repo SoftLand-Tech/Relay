@@ -36,6 +36,7 @@ import {
   busyStoredIds,
   pendingStoredIds,
   forgetSession,
+  isSessionNotFound,
   newChat,
   switchToSession,
   sessionsById,
@@ -287,7 +288,15 @@ export function ScreenShell({
           // block the delete itself.
         }
       }
-      await rpc('session.delete', { session_id: storedId })
+      try {
+        await rpc('session.delete', { session_id: storedId })
+      } catch (err) {
+        // 'Session not found' means the backend already lost it (serve
+        // reinstall / purge / re-pair to another machine) — the delete's goal
+        // is achieved, so clean up locally instead of failing the row. Any
+        // other error still surfaces.
+        if (!isSessionNotFound(err)) throw err
+      }
       if (live) await forgetSession(live)
       // Drop the row so the drawer updates without waiting for a poll.
       sessionRows.set(sessionRows.get().filter((r) => r.id !== storedId))

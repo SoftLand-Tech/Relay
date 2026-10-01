@@ -1402,6 +1402,13 @@ let sending = false
 // pending must not be queued behind (or delivered to) A.
 const sendingSessions = new Set<string>()
 
+// Hermes answers session-scoped RPCs with this when the live handle died
+// server-side (serve restart / reinstall mints fresh live ids) or the stored
+// session no longer exists (backend purge, re-pair to a different machine).
+const SESSION_NOT_FOUND_RE = /session not found/i
+export const isSessionNotFound = (err: unknown): boolean =>
+  err instanceof Error && SESSION_NOT_FOUND_RE.test(err.message)
+
 export async function sendPrompt(
   rawText: string,
   opts?: {
@@ -1531,7 +1538,22 @@ export async function sendPrompt(
       patchRowMediaPaths(sid, rowId, attachments, outcome.pathsById)
     }
     try {
-      await rpc('prompt.submit', { session_id: sid, text: submitText })
+      try {
+        await rpc('prompt.submit', { session_id: sid, text: submitText })
+      } catch (err) {
+        if (!isSessionNotFound(err)) throw err
+        // The live handle died server-side (serve restart / reinstall) while
+        // the chat looked perfectly open. Re-resume by the stored id — that
+        // mints a fresh live id, and runResume's merge carries the user row
+        // we already appended onto the new entry — then retry once. Desktop
+        // parity: withSessionNotFoundResume.
+        const stored = sessionsById.get()[sid]?.storedId
+        if (!stored) throw err
+        log('warn', 'chat', `session not found (${sid}) — re-resuming ${stored} and retrying the send`)
+        const fresh = await resumeShared(stored)
+        sid = fresh.sessionId
+        await rpc('prompt.submit', { session_id: sid, text: submitText })
+      }
     } catch (err) {
       if (attachedImagePaths.length) void detachImages(sid, attachedImagePaths)
       throw err
