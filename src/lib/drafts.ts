@@ -13,7 +13,7 @@ import { log } from './log'
  * scripts/ runs this in plain node.
  */
 
-const DRAFTS_KEY = 'hermes.drafts.v1'
+export const DRAFTS_KEY = 'hermes.drafts.v1'
 const MAX_DRAFTS = 60
 const PERSIST_DEBOUNCE_MS = 400
 
@@ -101,6 +101,20 @@ export function setDraft(storedId: string | null | undefined, text: string): voi
 
 export function clearDraft(storedId: string): void {
   setDraft(storedId, '')
+}
+
+/** Drop every draft at once (backend switch — backendIdentity.ts). Drafts are
+ *  keyed by stored ids that mean nothing to a different machine. Storage
+ *  removal is the identity sync's job; here we only empty the atom and cancel
+ *  the debounced write, which re-reads the atom at fire time and would
+ *  otherwise re-persist the old map. */
+export function resetDrafts(): void {
+  if (persistTimer) {
+    clearTimeout(persistTimer)
+    persistTimer = null
+  }
+  dirty = false
+  drafts.set({})
 }
 
 /** Flush a pending debounced write now (used by tests). */

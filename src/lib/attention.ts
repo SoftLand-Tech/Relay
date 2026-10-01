@@ -32,7 +32,7 @@ export interface AttentionRecord {
   at: number
 }
 
-const ATTENTION_KEY = 'hermes.attention.v1'
+export const ATTENTION_KEY = 'hermes.attention.v1'
 const MAX_TRACKED = 100
 
 export const attentionById = atom<Record<string, AttentionRecord>>({})
@@ -164,6 +164,15 @@ export function clearAttention(storedId: string): void {
   delete next[storedId]
   attentionById.set(next)
   persist()
+}
+
+/** Drop every attention record at once (backend switch — backendIdentity.ts).
+ *  Records are keyed by stored ids that belong to the machine that minted
+ *  them; a badge pointing at another backend's chat is noise. Storage
+ *  removal is the identity sync's job; the immediate persist below is
+ *  harmless — it re-reads the (now empty) atom. */
+export function resetAttention(): void {
+  attentionById.set({})
 }
 
 // ── Row status ──────────────────────────────────────────────────────────────

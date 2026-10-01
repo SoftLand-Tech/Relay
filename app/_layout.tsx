@@ -15,12 +15,13 @@ import {
   isConnected as isConnectedAtom, connectionState, connConfig, loadSavedConfig,
   connect, gatewayError, retryNow, disconnect, reconnectAttempt, onForeground, redactedUrl,
   servers as serversStore, activeServerId, refreshServers, switchToServer,
-  forgetActiveServer, mostRecentServer, type SavedServer,
+  forgetActiveServer, mostRecentServer, onDialConfig, type SavedServer,
 } from '../src/lib/gateway'
 import { hookChatEvents, loadOutbox, switchToSession } from '../src/lib/chat'
 import { loadAttention, pendingOpenStoredId, requestOpenSession } from '../src/lib/attention'
 import { loadDrafts } from '../src/lib/drafts'
 import { loadSendQueue } from '../src/lib/sendQueue'
+import { syncBackendIdentity } from '../src/lib/backendIdentity'
 import { parseConnectUrl } from '../src/lib/pairing'
 import { pruneRelayMedia } from '../src/lib/mediaCache'
 import { C, loadTheme, useStyles } from '../src/lib/theme'
@@ -64,11 +65,12 @@ export default function RootLayout() {
       SplashScreen.hide()
     } catch {}
     hookChatEvents()
+    // Every dial re-checks the backend identity (re-pair via deep link,
+    // saved-server switch, reconnect). The boot path below additionally
+    // syncs BEFORE the cache loaders run, so a first boot against a newly
+    // paired machine can't hydrate the previous machine's caches.
+    const offDial = onDialConfig(syncBackendIdentity)
     void loadTheme()
-    void loadOutbox()
-    void loadDrafts()
-    void loadSendQueue()
-    void loadAttention()
     void initPush()
     void refreshServers()
     // Cold-start relay-media prune (>7 days, then oldest-first past 200 MB) —
@@ -77,7 +79,18 @@ export default function RootLayout() {
     let cancelled = false
     ;(async () => {
       const saved = await loadSavedConfig()
-      if (!cancelled && saved) {
+      // Scope the device caches to this backend BEFORE they hydrate: a
+      // missing/different fingerprint purges once, then the loaders below
+      // read a clean slate.
+      if (saved) {
+        try { await syncBackendIdentity(saved) } catch {}
+      }
+      if (cancelled) return
+      void loadOutbox()
+      void loadDrafts()
+      void loadSendQueue()
+      void loadAttention()
+      if (saved) {
         try { await connect(saved) } catch {}
       }
     })()
@@ -116,6 +129,7 @@ export default function RootLayout() {
 
     return () => {
       cancelled = true
+      offDial()
       sub.remove()
       appSub.remove()
       removeNotifSub?.()

@@ -21,7 +21,7 @@ import { log } from './log'
 export const pinnedIds = atom<string[]>([])
 export const archivedIds = atom<string[]>([])
 
-const MARKS_KEY = 'hermes.chatListMarks.v1'
+export const MARKS_KEY = 'hermes.chatListMarks.v1'
 
 /**
  * AsyncStorage is imported lazily: scripts/ runs in plain node, where the RN
@@ -111,6 +111,15 @@ export function forgetChatMarks(id: string) {
   if (hadPin) pinnedIds.set(pinnedIds.get().filter((x) => x !== id))
   if (hadArchive) archivedIds.set(archivedIds.get().filter((x) => x !== id))
   if (hadPin || hadArchive) persist()
+}
+
+/** Drop every pin/archive mark at once (backend switch — backendIdentity.ts).
+ *  Marks are keyed by stored ids that belong to the machine that minted
+ *  them. Storage removal is the identity sync's job; the immediate persist
+ *  below is harmless — it re-reads the (now empty) atoms. */
+export function resetChatMarks(): void {
+  pinnedIds.set([])
+  archivedIds.set([])
 }
 
 // ── Grouping ────────────────────────────────────────────────────────────────

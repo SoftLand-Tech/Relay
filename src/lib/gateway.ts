@@ -57,6 +57,22 @@ let manualClose = false
 // gate it — but stay ordered with respect to each other.
 let persistChain: Promise<void> = Promise.resolve()
 
+type DialHook = (c: ConnConfig) => Promise<void>
+const dialHooks = new Set<DialHook>()
+/**
+ * Register a callback that runs on every dial with the VALIDATED config,
+ * before the handshake and the persist chain. Backend-identity scoping
+ * (backendIdentity.ts) hangs off this so every dial path — boot connect,
+ * deep-link pair, saved-server switch, reconnect retry — re-checks without
+ * gateway importing the cache modules (they import gateway; a direct import
+ * here would be a cycle). A throwing hook is logged and skipped: it must
+ * never block connecting.
+ */
+export function onDialConfig(hook: DialHook): () => void {
+  dialHooks.add(hook)
+  return () => { dialHooks.delete(hook) }
+}
+
 type EventSink = (e: GatewayEvent) => void
 const sinks = new Set<EventSink>()
 export function onEvent(sink: EventSink): () => void {
@@ -405,6 +421,12 @@ async function dial(c: ConnConfig, opts?: { isRetry?: boolean }): Promise<void> 
   manualClose = false
   gatewayError.set(null)
   connectionState.set('connecting')
+  // The config is validated — the identity point. Runs before the handshake
+  // AND before the persist chain below, so a backend switch re-scopes the
+  // caches before anything reads them.
+  for (const hook of dialHooks) {
+    try { await hook(v) } catch (err) { log('warn', 'gateway', `dial hook failed: ${String(err)}`) }
+  }
   // Persistence runs CONCURRENTLY with the dial, not before it: the writes
   // are pure side effects for the handshake (the token rides the URL; the
   // connect path below reads none of what they write), so the reconnect tap

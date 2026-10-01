@@ -152,7 +152,7 @@ const EMPTY: SessionState = {
 const LAST_SESSION_KEY = 'hermes.activeSession.v1'
 /** live session id -> stored session id, so a relaunch can resume it. */
 const STORED_ID_MAP_KEY = 'hermes.storedIdMap.v1'
-const OUTBOX_KEY = 'hermes.outbox.v1'
+export const OUTBOX_KEY = 'hermes.outbox.v1'
 const transcriptKey = (sessionId: string) => `hermes.transcript.${sessionId}.v1`
 /** Transcripts are keyed by the DURABLE stored id — the live id is re-minted
  *  on every resume, so a key taken from it strands the blob: writes land
@@ -1340,6 +1340,40 @@ export async function forgetSession(liveId: string) {
     /* best effort */
   }
   if (activeSession.get() === liveId) activeSession.set(null)
+}
+
+/**
+ * Wipe every session-scoped cache this module owns — the backend-switch
+ * companion of forgetSession (backendIdentity.ts drives it): stored ids are
+ * only meaningful to the backend that minted them, so transcripts, the
+ * stored-id map and the last-session pointer from another machine must never
+ * hydrate here. In-memory stores reset BEFORE the storage purge, or armed
+ * persist debounces would re-write the old blobs from memory (the
+ * forgetSession ordering). SAFE to drop wholesale: server history re-hydrates
+ * on resume (applyHistory replaces messages; the cache only survives a lazy
+ * session) — the device-local tool log is the only real loss.
+ */
+export async function resetSessionCaches(): Promise<void> {
+  for (const t of persistTimers.values()) clearTimeout(t)
+  persistTimers.clear()
+  // Resumes keyed by old stored ids must not land their merge after the wipe.
+  inflightResumes.clear()
+  sessionsById.set({})
+  activeSession.set(null)
+  sessionLoadings.set({})
+  pendingBySession.set({})
+  storedIdMap = {}
+  // storedIdMapLoaded stays true: the map is genuinely empty now, and
+  // rememberStoredId repopulates it on the next create/resume/info event.
+  try {
+    // Prefix sweep catches every vintage: stored-keyed `.v2`, the interim
+    // stored-keyed `.v1`, and legacy live-keyed `.v1` blobs.
+    const keys = await AsyncStorage.getAllKeys()
+    const stale = keys.filter((k) => k.startsWith('hermes.transcript.'))
+    await AsyncStorage.multiRemove([...stale, LAST_SESSION_KEY, STORED_ID_MAP_KEY])
+  } catch {
+    /* best effort */
+  }
 }
 
 /** Append a message the app produced itself (e.g. slash command output).

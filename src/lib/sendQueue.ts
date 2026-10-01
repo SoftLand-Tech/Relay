@@ -21,7 +21,7 @@ export interface QueuedSend {
   ts: number
 }
 
-const QUEUE_KEY = 'hermes.sendQueue.v1'
+export const QUEUE_KEY = 'hermes.sendQueue.v1'
 const MAX_PER_CHAT = 20
 const MAX_TEXT = 8000
 const MAX_CHATS = 60
@@ -153,6 +153,21 @@ export function clearSendQueue(storedId: string): void {
   delete next[storedId]
   sendQueue.set(next)
   persist()
+}
+
+/** Drop every chat's queue at once (backend switch — backendIdentity.ts).
+ *  Queued prompts are keyed by stored ids that belong to the machine that
+ *  minted them; flushing them at a different backend would deliver them to
+ *  the wrong machine. Storage removal is the identity sync's job; here we
+ *  only empty the atom and cancel the debounced write, which re-reads the
+ *  atom at fire time and would otherwise re-persist the old map. */
+export function resetSendQueue(): void {
+  if (persistTimer) {
+    clearTimeout(persistTimer)
+    persistTimer = null
+  }
+  dirty = false
+  sendQueue.set({})
 }
 
 /** Flush a pending debounced write now (used by tests). */
