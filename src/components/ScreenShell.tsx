@@ -305,10 +305,13 @@ export function ScreenShell({
         // positioned, inset by the measured controls width so it can never
         // run under the model chip; onSearch deliberately has no tray
         // affordance — search lives in the drawer's Chats tab).
-        <View style={[s.topBarTray, { paddingTop: insets.top + 8 }]}>
+        // The card starts BELOW the status bar (marginTop carries the inset);
+        // padding the inset inside the card used to paint a tall empty head
+        // above the buttons — the "top padding too much" bug.
+        <View style={[s.topBarTray, { marginTop: insets.top + 6, paddingTop: 6 }]}>
           <View
             pointerEvents="none"
-            style={[s.trayTitleAbs, { top: insets.top + 8, bottom: 8, paddingHorizontal: 64 }]}
+            style={[s.trayTitleAbs, { top: 6, bottom: 6, paddingHorizontal: 64 }]}
           >
             <View style={s.trayTitleWrap}>
               {showBrand ? <Text style={s.trayBrand}>Moch</Text> : null}
