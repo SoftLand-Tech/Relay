@@ -94,6 +94,9 @@ const socketTransport = (socket: WebSocketLike): JsonRpcTransport => ({ send: te
 
 export class JsonRpcGatewayClient {
   private socket: WebSocketLike | null = null
+  /** URL of the socket in `this.socket`, '' when none — connect() compares it
+   *  to tell an idempotent re-dial from a switch to a different gateway. */
+  private socketUrl = ''
   private state: ConnectionState = 'idle'
   private readonly channel: JsonRpcRequestChannel
   private readonly events = new GatewayEventHub()
@@ -163,7 +166,18 @@ export class JsonRpcGatewayClient {
     }
 
     if (!isGatewayWebSocketUrl(wsUrl)) throw invalidUrl()
-    if ((this.socket && this.socket.readyState === WebSocket.OPEN) || this.state === 'connecting') return
+    // Idempotent for the SAME endpoint: reconnect taps and double-connects
+    // must not bounce a healthy socket. A DIFFERENT URL must never be
+    // silently ignored just because some socket happens to be open — that
+    // no-op kept the phone on the first machine when pairing a second one
+    // behind the same relay host.
+    if (wsUrl === this.socketUrl && ((this.socket && this.socket.readyState === WebSocket.OPEN) || this.state === 'connecting')) return
+    if (this.socket || this.state === 'connecting') {
+      const stale = this.socket
+      this.dropSocket(new Error('superseded by a connect to a different gateway'))
+      try { stale?.close() } catch {}
+    }
+    this.socketUrl = wsUrl
 
     this.setState('connecting')
 
@@ -434,6 +448,7 @@ export class JsonRpcGatewayClient {
     this.replayInFlight = false
     this.replayHold = null
     this.socket = null
+    this.socketUrl = ''
     this.channel.detach(error)
     this.setState('closed')
   }
