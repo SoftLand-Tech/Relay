@@ -27,7 +27,7 @@ export function PairForm({ onPaired }: { onPaired: () => void }) {
   const [permission, requestPermission] = useCameraPermissions()
   const scanned = useRef(false)
 
-  const doConnect = async (override?: { host: string; token: string; tls: boolean }) => {
+  const doConnect = async (override?: { host: string; token: string; tls: boolean; name?: string }) => {
     const h = (override?.host ?? host).trim()
     const t = (override?.token ?? token).trim()
     const useTls = override?.tls ?? tls
@@ -42,7 +42,7 @@ export function PairForm({ onPaired }: { onPaired: () => void }) {
     setBusy(true)
     setError(null)
     try {
-      await connect({ host: h, token: t, tls: useTls })
+      await connect({ host: h, token: t, tls: useTls, name: override?.name })
       onPaired()
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Check host and token')

@@ -99,7 +99,7 @@ export default function RootLayout() {
       if (!url || !url.startsWith('hermes://')) return
       try {
         const p = parseConnectUrl(url)
-        await connect({ host: p.host, token: p.token, tls: p.tls })
+        await connect({ host: p.host, token: p.token, tls: p.tls, name: p.name })
         router.replace('/(tabs)/chat')
       } catch (e) {
         setLinkMsg(e instanceof Error ? e.message : 'Bad pairing link')

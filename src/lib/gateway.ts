@@ -9,6 +9,8 @@ export interface ConnConfig {
   host: string // "127.0.0.1:9119" or "myserver.tailnet.ts.net:443"
   token: string
   tls: boolean
+  /** Machine label for the saved list (from the QR's name=). Optional. */
+  name?: string
 }
 
 const HOST_KEY = 'hermes.connection.host.v2'
@@ -133,7 +135,8 @@ export function validateConfig(c: ConnConfig): ConnConfig {
   const token = c.token.trim()
   if (!token) throw new Error('Enter the token.')
   if (token.length > 4096) throw new Error('Token too long.')
-  return { host, token, tls: !!c.tls }
+  const name = (c.name ?? '').trim().slice(0, 40)
+  return { host, token, tls: !!c.tls, ...(name ? { name } : {}) }
 }
 
 function wsUrl(c: ConnConfig): string {
@@ -215,13 +218,32 @@ export async function refreshServers(): Promise<SavedServer[]> {
 async function upsertServer(c: ConnConfig): Promise<SavedServer> {
   const list = await readServerList()
   const now = Date.now()
-  let srv = list.find((s) => s.host === c.host && s.tls === c.tls)
-  if (srv) {
-    srv.lastUsedAt = now
-  } else {
-    srv = { id: newServerId(), name: c.host, host: c.host, tls: c.tls, addedAt: now, lastUsedAt: now }
-    list.push(srv)
+  // The machine's identity is the TOKEN, not the address: many machines sit
+  // behind one host (the official relay routes by token), so keying entries
+  // by host+tls made scanning a second computer silently hijack the first
+  // entry's token — one flip-flopping entry instead of two machines.
+  // Re-scanning the SAME machine refreshes its entry; a different token on
+  // the same address is a different machine and gets its own entry.
+  const candidates = list.filter((s) => s.host === c.host && s.tls === c.tls)
+  for (const srv of candidates) {
+    const saved = await readTokenFor(srv.id)
+    if (saved === c.token) {
+      srv.lastUsedAt = now
+      await writeServerList(list)
+      try { await AsyncStorage.setItem(ACTIVE_SERVER_KEY, srv.id) } catch {}
+      activeServerId.set(srv.id)
+      return srv
+    }
   }
+  let name = (c.name || c.host).trim() || c.host
+  const taken = new Set(list.map((s) => s.name))
+  if (taken.has(name)) {
+    let i = 2
+    while (taken.has(`${name} ${i}`)) i++
+    name = `${name} ${i}`
+  }
+  const srv: SavedServer = { id: newServerId(), name, host: c.host, tls: c.tls, addedAt: now, lastUsedAt: now }
+  list.push(srv)
   await writeTokenFor(srv.id, c.token)
   await writeServerList(list)
   try { await AsyncStorage.setItem(ACTIVE_SERVER_KEY, srv.id) } catch {}

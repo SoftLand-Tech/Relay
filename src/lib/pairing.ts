@@ -4,6 +4,9 @@ export interface PairingInfo {
   host: string
   token: string
   tls: boolean
+  /** Machine label from the QR (moch-link sends the hostname). Optional —
+   *  the app names the entry after the host when absent. */
+  name?: string
 }
 
 /** hermes://connect?host=..&token=..&tls=1 */
@@ -36,7 +39,10 @@ function parseQuery(qs: string): PairingInfo {
   if (!token) throw new Error('Pairing code has no token.')
   const host = normalizeHost(decodeURIComponent(hostRaw))
   const tls = tlsRaw === '1' || tlsRaw === 'true' || tlsRaw === 'wss' || tlsRaw === 'https'
-  return { host, token, tls }
+  // Several machines can share one address (the official relay routes by
+  // token), so the QR carries the machine's own name for the saved list.
+  const name = (params.get('name') ?? '').trim().slice(0, 40)
+  return { host, token, tls, ...(name ? { name } : {}) }
 }
 
 /** Human-friendly one-liner for terminal display / manual typing fallback. */
