@@ -64,7 +64,7 @@ import { AttachmentChip } from '../../src/components/media/AttachmentChip'
 import { AttachSheet } from '../../src/components/media/AttachSheet'
 import { chatTabFocused } from '../../src/lib/attention'
 import { draftFor, setDraft } from '../../src/lib/drafts'
-import { isConnected as isConnectedAtom, connectionState, gatewayError, retryNow } from '../../src/lib/gateway'
+import { isConnected as isConnectedAtom, connectionState, gatewayError, retryNow, reconnectAttempt } from '../../src/lib/gateway'
 import { completeSlash, loadCatalog, runCommand, parseSlashCommand, canonicalName, interactiveTarget, describeCommand, subsFor, argumentModeFor, slashLabel, localCompleteSync, type CompletionItem, type SlashOutcome } from '../../src/lib/slash'
 import { liveModel, liveReasoning, liveReasoningDisplay, fetchReasoningDisplay } from '../../src/lib/modelState'
 import { ModelPickerSheet } from '../../src/components/ModelPickerSheet'
@@ -122,8 +122,11 @@ export default function Chat() {
   }, [online])
   // The connect window (~1s wifi, up to 4s mobile data) is NOT an outage:
   // showing OFFLINE while the dial is in flight made healthy opens look
-  // broken. OFFLINE means dial attempts are actually failing.
-  const showOfflineBanner = !online && !offlineGrace && connState !== 'connecting'
+  // broken. Same for the first auto-reconnects after a mid-session drop —
+  // the app is already dialing and about to heal. OFFLINE appears when
+  // reconnects keep failing (3rd+ attempt, ~7s+ of real outage).
+  const reconnects = useStore(reconnectAttempt)
+  const showOfflineBanner = !online && !offlineGrace && connState !== 'connecting' && reconnects < 2
   const conn = useStore(connectionState)
   const gerr = useStore(gatewayError)
   const curModel = useStore(liveModel)
