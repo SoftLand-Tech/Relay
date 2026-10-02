@@ -5,7 +5,7 @@
  * a fetch. Transparent, non-interactive, fades in 150ms on first load.
  */
 import React, { forwardRef, useEffect, useImperativeHandle, useMemo, useRef } from 'react'
-import { AccessibilityInfo, Animated, StyleSheet, View } from 'react-native'
+import { AccessibilityInfo, Animated, AppState, StyleSheet, View } from 'react-native'
 import { WebView } from 'react-native-webview'
 import { mochiDocument, type MochiStateName } from './mochiStates.gen'
 import type { MochiSurfaceHandle, MochiSurfaceProps } from './MochiSurfaceCommon'
@@ -21,6 +21,9 @@ export const MochiSurface = forwardRef<MochiSurfaceHandle, MochiSurfaceProps>(
     const fade = useRef(new Animated.Value(0)).current
     // Memoized once — the document is static for the surface's lifetime.
     const html = useMemo(() => mochiDocument(__DEV__), [])
+    // Answer to the foreground probe: null while waiting, then whether the
+    // document's hooks are still alive in the renderer.
+    const probeReplyRef = useRef<((alive: boolean) => void) | null>(null)
 
     const inject = (name: MochiStateName) => {
       lastInjectedRef.current = name
@@ -69,6 +72,49 @@ export const MochiSurface = forwardRef<MochiSurfaceHandle, MochiSurfaceProps>(
         .catch(start)
     }
 
+    // Android kills WebView RENDERER processes under background memory
+    // pressure while this component stays mounted — the mascot goes
+    // permanently blank and every injectJavaScript silently no-ops (onLoadEnd
+    // never re-fires for an OS-level renderer death). On foreground, probe
+    // the document: silence or a dead flag means reload; onLoadEnd then
+    // re-applies the last committed state and replays the fade-in.
+    useEffect(() => {
+      const sub = AppState.addEventListener('change', (s) => {
+        if (s !== 'active' || !loadedRef.current) return
+        const myReply = (alive: boolean) => {
+          if (alive) return
+          const want = lastInjectedRef.current
+          lastInjectedRef.current = null // reload starts from the base state
+          pendingRef.current = want
+          webRef.current?.reload()
+        }
+        probeReplyRef.current = myReply
+        webRef.current?.injectJavaScript(
+          `window.ReactNativeWebView.postMessage(JSON.stringify({t:'mochProbe',alive:!!window.__mochSet}));true;`,
+        )
+        setTimeout(() => {
+          // a newer probe replaced ours — its own timeout owns the verdict
+          if (probeReplyRef.current !== myReply) return
+          probeReplyRef.current = null
+          myReply(false) // silence = the renderer is gone
+        }, 700)
+      })
+      return () => sub.remove()
+    }, [])
+
+    const onWebViewMessage = (e: { nativeEvent: { data: string } }) => {
+      try {
+        const m = JSON.parse(e.nativeEvent.data) as { t?: string; alive?: boolean }
+        if (m?.t === 'mochProbe' && probeReplyRef.current) {
+          const reply = probeReplyRef.current
+          probeReplyRef.current = null
+          reply(!!m.alive)
+        }
+      } catch {
+        /* not our message — the document never posts anything else */
+      }
+    }
+
     return (
       <Animated.View style={[s.fill, { opacity: fade }]} pointerEvents="none">
         <View style={s.fill} pointerEvents="none" aria-hidden={true}>
@@ -76,6 +122,7 @@ export const MochiSurface = forwardRef<MochiSurfaceHandle, MochiSurfaceProps>(
             ref={webRef}
             source={{ html }}
             onLoadEnd={applyPending}
+            onMessage={onWebViewMessage}
             style={s.fill}
             containerStyle={s.fill}
             scrollEnabled={false}
