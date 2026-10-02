@@ -45,7 +45,7 @@ import {
   respondClarify,
   respondClarifyBatch,
   respondPrivileged,
-  ensureSession,
+  openLocalChatIfNeeded,
   activeLiveId,
   chatBanner,
   activeQueue,
@@ -203,11 +203,20 @@ export default function Chat() {
     updateInput(draft)
   }, [draft, updateInput])
 
+  // A cold boot / backend switch lands on a LOCAL new-chat window — no
+  // server session exists until the first message. ensureSession is NOT
+  // called here on purpose: it would create an empty session (and a saved
+  // row) on every launch.
+  useEffect(() => {
+    openLocalChatIfNeeded()
+  }, [sid])
+  // ^ sidValue rides the deps so a purge (device switch) that blanks the
+  // screen re-opens the window, while a landing resume (sid set) does not.
+
   useEffect(() => {
     if (!online) return
     void (async () => {
       try {
-        await ensureSession()
         await loadCatalog()
         await flushOutbox().catch(() => {})
       } catch {

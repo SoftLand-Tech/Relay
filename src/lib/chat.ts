@@ -1009,13 +1009,18 @@ export async function ensureSession(): Promise<string> {
   const current = activeSession.get()
   if (current) {
     const state = sessionsById.get()[current]
-    // The optimistic new-chat window: a create is already in flight — a send
-    // must wait for it (and land in the NEW chat), never mint another one.
+    // The optimistic new-chat window: creation is DEFERRED to the first
+    // real action (send / model pick) — an unsent chat never exists on the
+    // server and never shows in the saved list.
     if (state?.provisional) {
       if (inflightCreate) return await inflightCreate
-      // No create in flight means it failed — surface as a failed send so
-      // sendPrompt's catch marks the bubble.
-      throw new Error('New chat could not be created')
+      const tempId = current
+      const pseudo = state.storedId
+      const p = runNewChat(tempId, pseudo).finally(() => {
+        if (inflightCreate === p) inflightCreate = null
+      })
+      inflightCreate = p
+      return await p
     }
     // A released session still has a usable stored id — bring it back rather
     // than letting the next send fail against a dead handle.
@@ -1038,31 +1043,16 @@ export async function ensureSession(): Promise<string> {
 
   if (!storedIdMapLoaded) await loadStoredIdMap()
 
-  // A pending deep-link (notification/toast tap) wins over LAST_SESSION —
-  // this is what keeps a cold launch from a notification to ONE resume
-  // instead of two racing ones (app/_layout.tsx fires the same target; even
-  // when both run, the shared resume dedupes them).
+  // A pending deep-link (notification/toast tap) resumes its ONE session;
+  // a plain cold boot does NOT — the screen gets a local new chat instead
+  // (openLocalChatIfNeeded), and the session is only created on first send.
   const po = pendingOpenStoredId.get()
   if (po && Date.now() - po.at <= 60_000) {
     pendingOpenStoredId.set(null)
     try {
       return (await withBootPaint(po.storedId)).sessionId
     } catch {
-      /* fall through to LAST_SESSION */
-    }
-  }
-
-  const stored = await AsyncStorage.getItem(LAST_SESSION_KEY)
-  if (stored) {
-    try {
-      return (await withBootPaint(stored)).sessionId
-    } catch (err) {
-      log('warn', 'chat', `resume failed, creating new: ${String(err)}`)
-      try {
-        await AsyncStorage.removeItem(LAST_SESSION_KEY)
-      } catch {
-        /* best effort */
-      }
+      /* fall through to a fresh chat */
     }
   }
   const r = await createSession()
@@ -1130,11 +1120,22 @@ export function newChat(): Promise<string> {
   // Mascot greeting — latched by the hook at land time (activeSession ===
   // tempId right here), so it plays its full loop across runNewChat's re-key.
   mochiMoment.set({ kind: 'greeting', sid: tempId, at: Date.now() })
-  const p = runNewChat(tempId, pseudo).finally(() => {
-    if (inflightCreate === p) inflightCreate = null
-  })
-  inflightCreate = p
-  return p
+  // Fully LOCAL: no session.create until the first message (ensureSession
+  // starts runNewChat then). An unsent new chat must not exist on the
+  // server, and must not appear in the saved-chats list.
+  return Promise.resolve(tempId)
+}
+
+/** Open the local new-chat window when the screen is staring at nothing —
+ *  cold boot, a backend switch's cache purge. Skips when a chat is already
+ *  on screen, a notification deep-link is pending, or a resume is in flight
+ *  (opening over a landing resume would steal the screen). */
+export function openLocalChatIfNeeded(): void {
+  if (activeSession.get()) return
+  const po = pendingOpenStoredId.get()
+  if (po && Date.now() - po.at <= 60_000) return
+  if (inflightResumes.size > 0) return
+  void newChat().catch(() => {})
 }
 
 /** Background half of `newChat`: create the session, then re-key the

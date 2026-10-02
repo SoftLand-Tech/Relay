@@ -91,6 +91,11 @@ export default function RootLayout() {
       void loadSendQueue()
       void loadAttention()
       if (saved) {
+        // Seed the UI with the saved pairing BEFORE the dial lands: the tabs
+        // render instantly (chat shows its connecting state) instead of the
+        // bare boot screen, and no saved computer ever needs re-pairing to
+        // look connected — the last connected one is simply resumed.
+        connConfig.set(saved)
         try { await connect(saved) } catch {}
       }
     })()
