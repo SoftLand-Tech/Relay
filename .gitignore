@@ -52,3 +52,6 @@ out/
 
 # EAS signing credentials — never commit
 credentials.json
+
+# local-only project map (machine paths, deploy runbooks) — see PROJECT.md
+PROJECT.md
