@@ -781,7 +781,7 @@ export default function Chat() {
         }
       >
         <Animated.View style={[s.root, kbPad]}>
-          {!showOfflineBanner ? (
+          {showOfflineBanner ? (
             <Pressable
               style={({ pressed }) => [s.banner, pressed && s.btnPressed]}
               onPress={() => { void retryNow().catch(() => {}) }}
