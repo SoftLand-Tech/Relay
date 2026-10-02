@@ -30,7 +30,7 @@ import {
 import { C, S, useStyles, useShape } from '../lib/theme'
 import { runningAutomationCount, refreshRunningAutomations } from '../lib/automationsState'
 import { attentionById, rowStatus } from '../lib/attention'
-import { isConnected as isConnectedAtom, rpc } from '../lib/gateway'
+import { isConnected as isConnectedAtom, connectionState, rpc } from '../lib/gateway'
 import {
   activeStoredId,
   busyStoredIds,
@@ -71,6 +71,11 @@ export function ScreenShell({
   const router = useRouter()
   const insets = useSafeAreaInsets()
   const online = useStore(isConnectedAtom)
+  // Tri-state: while the dial is in flight the app is neither connected nor
+  // offline — flashing the dead-cloud icon for the ~1s connect window (or
+  // longer on mobile data) read as "offline" to users mid-open.
+  const connState = useStore(connectionState)
+  const connecting = connState === 'connecting'
 
   const pending = useStore(pendingStoredIds)
   const busy = useStore(busyStoredIds)
@@ -344,10 +349,10 @@ export function ScreenShell({
               <Pressable
                 style={s.trayCircle}
                 hitSlop={8}
-                accessibilityLabel={online ? 'Connected' : 'Not connected'}
+                accessibilityLabel={online ? 'Connected' : connecting ? 'Connecting' : 'Not connected'}
               >
                 <Icon
-                  name={online ? 'radio-button-on' : 'cloud-offline-outline'}
+                  name={online ? 'radio-button-on' : connecting ? 'ellipse-outline' : 'cloud-offline-outline'}
                   size={18}
                   color={online ? C.greenSoft : C.textFaint}
                 />
@@ -387,10 +392,10 @@ export function ScreenShell({
           <Pressable
             style={s.circle}
             hitSlop={8}
-            accessibilityLabel={online ? 'Connected' : 'Not connected'}
+            accessibilityLabel={online ? 'Connected' : connecting ? 'Connecting' : 'Not connected'}
           >
             <Icon
-              name={online ? 'radio-button-on' : 'cloud-offline-outline'}
+              name={online ? 'radio-button-on' : connecting ? 'ellipse-outline' : 'cloud-offline-outline'}
               size={18}
               color={online ? C.greenSoft : C.textFaint}
             />

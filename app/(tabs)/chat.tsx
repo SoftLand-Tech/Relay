@@ -113,13 +113,17 @@ export default function Chat() {
   // offline banner — the chat renders fine from cache meanwhile. The banner
   // only appears when the outage outlasts this grace window.
   const [offlineGrace, setOfflineGrace] = useState(false)
+  const connState = useStore(connectionState)
   useEffect(() => {
     if (online) { setOfflineGrace(false); return }
     setOfflineGrace(true)
     const t = setTimeout(() => setOfflineGrace(false), 2500)
     return () => clearTimeout(t)
   }, [online])
-  const showOfflineBanner = !online && !offlineGrace
+  // The connect window (~1s wifi, up to 4s mobile data) is NOT an outage:
+  // showing OFFLINE while the dial is in flight made healthy opens look
+  // broken. OFFLINE means dial attempts are actually failing.
+  const showOfflineBanner = !online && !offlineGrace && connState !== 'connecting'
   const conn = useStore(connectionState)
   const gerr = useStore(gatewayError)
   const curModel = useStore(liveModel)
