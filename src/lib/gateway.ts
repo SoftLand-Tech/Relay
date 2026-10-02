@@ -526,11 +526,30 @@ export function disconnect() {
 }
 
 /** Foreground resume — retry immediately if we were supposed to be connected. */
+let foregroundProbeInFlight = false
 export function onForeground() {
-  if (wantConnection && !manualClose && connectionState.get() !== 'open' && connectionState.get() !== 'connecting') {
+  if (!wantConnection || manualClose) return
+  const st = connectionState.get()
+  if (st !== 'open' && st !== 'connecting') {
     log('info', 'gateway', 'foreground resume — retrying')
     void retryNow().catch(() => {})
+    return
   }
+  // The state LOOKS open, but Android froze the process in the background and
+  // the socket is usually half-dead by the time the user returns. Probe it
+  // right now: waiting for the heartbeat cycle to notice costs up to 45s of
+  // "reconnecting" on the next thing the user touches.
+  if (foregroundProbeInFlight || !client) return
+  foregroundProbeInFlight = true
+  client
+    .request('gateway.ping', {}, 2500)
+    .catch(() => {
+      if (connectionState.get() === 'open') {
+        log('info', 'gateway', 'foreground probe found a dead socket — rebuilding')
+        void retryNow().catch(() => {})
+      }
+    })
+    .finally(() => { foregroundProbeInFlight = false })
 }
 
 export function getClient(): JsonRpcGatewayClient | null { return client }

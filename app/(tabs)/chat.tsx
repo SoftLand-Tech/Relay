@@ -109,6 +109,17 @@ export default function Chat() {
   const booting = !!(storedId && loadings[storedId]) && msgs.length === 0
   const banner = useStore(chatBanner)
   const online = useStore(isConnectedAtom)
+  // A short drop (background socket death + ~2s rebuild) must not flash the
+  // offline banner — the chat renders fine from cache meanwhile. The banner
+  // only appears when the outage outlasts this grace window.
+  const [offlineGrace, setOfflineGrace] = useState(false)
+  useEffect(() => {
+    if (online) { setOfflineGrace(false); return }
+    setOfflineGrace(true)
+    const t = setTimeout(() => setOfflineGrace(false), 2500)
+    return () => clearTimeout(t)
+  }, [online])
+  const showOfflineBanner = !online && !offlineGrace
   const conn = useStore(connectionState)
   const gerr = useStore(gatewayError)
   const curModel = useStore(liveModel)
@@ -763,7 +774,7 @@ export default function Chat() {
         }
       >
         <Animated.View style={[s.root, kbPad]}>
-          {!online ? (
+          {!showOfflineBanner ? (
             <Pressable
               style={({ pressed }) => [s.banner, pressed && s.btnPressed]}
               onPress={() => { void retryNow().catch(() => {}) }}
